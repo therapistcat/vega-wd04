@@ -1,0 +1,157 @@
+from datetime import datetime, timezone
+from pathlib import Path
+from uuid import uuid4
+
+from bson import ObjectId
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from motor.motor_asyncio import AsyncIOMotorDatabase
+
+from app.core.config import settings
+from app.core.database import get_database
+from app.core.security import require_authority
+from app.models.complaint_model import COMPLAINTS_COLLECTION, serialize_complaint
+from app.schemas.complaint_schema import (
+    ComplaintResponse,
+    ComplaintStatusUpdateRequest,
+    SpatialAnalyticsPoint,
+)
+from app.services.spatial_service import compute_spatial_analytics
+
+
+router = APIRouter(prefix="/a", tags=["authority"])
+UPLOAD_DIR = Path(__file__).resolve().parents[2] / "static" / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
+
+
+def _resolve_extension(image: UploadFile) -> str:
+    suffix = Path((image.filename or "").strip().lower()).suffix
+    if suffix in ALLOWED_IMAGE_EXTENSIONS:
+        return suffix
+    if image.content_type == "image/png":
+        return ".png"
+    if image.content_type == "image/webp":
+        return ".webp"
+    return ".jpg"
+
+
+async def _save_resolution_image(image: UploadFile) -> str:
+    if not image.content_type or not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Fixed-work image must be an image file")
+    data = await image.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Fixed-work image is empty")
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Fixed-work image exceeds 8MB")
+
+    ext = _resolve_extension(image)
+    file_name = f"{uuid4().hex}{ext}"
+    output_path = UPLOAD_DIR / file_name
+    output_path.write_bytes(data)
+    return f"/static/uploads/{file_name}"
+
+
+@router.get("/complaints", response_model=list[ComplaintResponse])
+async def list_all_complaints(
+    current_user: dict = Depends(require_authority(settings.authority_min_level_list)),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> list[ComplaintResponse]:
+    cursor = db[COMPLAINTS_COLLECTION].find({})
+    complaints = await cursor.sort("created_at", -1).to_list(length=500)
+    return [ComplaintResponse.model_validate(serialize_complaint(item)) for item in complaints]
+
+
+@router.patch("/complaints/{complaint_id}/status", response_model=ComplaintResponse)
+async def update_complaint_status(
+    complaint_id: str,
+    payload: ComplaintStatusUpdateRequest,
+    current_user: dict = Depends(
+        require_authority(settings.authority_min_level_status_update)
+    ),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> ComplaintResponse:
+    try:
+        oid = ObjectId(complaint_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid complaint id") from exc
+
+    await db[COMPLAINTS_COLLECTION].update_one(
+        {"_id": oid},
+        {
+            "$set": {
+                "status": payload.status,
+                "updated_at": datetime.now(timezone.utc),
+            }
+        },
+    )
+
+    complaint = await db[COMPLAINTS_COLLECTION].find_one({"_id": oid})
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+
+    return ComplaintResponse.model_validate(serialize_complaint(complaint))
+
+
+@router.post("/complaints/{complaint_id}/status-with-proof", response_model=ComplaintResponse)
+async def update_complaint_status_with_proof(
+    complaint_id: str,
+    status_value: str = Form(..., alias="status"),
+    resolution_note: str | None = Form(default=None, max_length=2000),
+    fixed_image: UploadFile | None = File(default=None),
+    current_user: dict = Depends(
+        require_authority(settings.authority_min_level_status_update)
+    ),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> ComplaintResponse:
+    valid_statuses = {"Open", "In Progress", "Resolved"}
+    if status_value not in valid_statuses:
+        raise HTTPException(status_code=400, detail="Invalid status")
+
+    try:
+        oid = ObjectId(complaint_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid complaint id") from exc
+
+    if status_value == "Resolved" and fixed_image is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Resolved complaints must include fixed-work image proof",
+        )
+
+    fixed_image_url = None
+    if fixed_image is not None:
+        fixed_image_url = await _save_resolution_image(fixed_image)
+
+    update_fields = {
+        "status": status_value,
+        "resolution_note": resolution_note,
+        "updated_at": datetime.now(timezone.utc),
+        "resolved_by": {
+            "id": current_user.get("id"),
+            "name": current_user.get("name"),
+            "role": current_user.get("role"),
+            "authority_rank": current_user.get("authority_rank"),
+        },
+    }
+    if fixed_image_url is not None:
+        update_fields["fixed_image_url"] = fixed_image_url
+    if status_value == "Resolved":
+        update_fields["resolved_at"] = datetime.now(timezone.utc)
+
+    await db[COMPLAINTS_COLLECTION].update_one({"_id": oid}, {"$set": update_fields})
+    complaint = await db[COMPLAINTS_COLLECTION].find_one({"_id": oid})
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+
+    return ComplaintResponse.model_validate(serialize_complaint(complaint))
+
+
+@router.get("/spatial-analytics", response_model=list[SpatialAnalyticsPoint])
+async def spatial_analytics(
+    current_user: dict = Depends(
+        require_authority(settings.authority_min_level_spatial_analytics)
+    ),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> list[SpatialAnalyticsPoint]:
+    points = await compute_spatial_analytics(db, window_hours=24 * 30)
+    return [SpatialAnalyticsPoint.model_validate(point) for point in points]
