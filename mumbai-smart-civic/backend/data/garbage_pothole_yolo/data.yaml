@@ -1,0 +1,7 @@
+path: C:\Users\Shoaib Kazi\OneDrive\VegaHackathon\vega-wd04\mumbai-smart-civic\backend\data\garbage_pothole_yolo
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: garbage
+  1: pothole
