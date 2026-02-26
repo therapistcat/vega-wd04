@@ -25,6 +25,12 @@ class Settings(BaseSettings):
 
     ml_service_url: str = "http://localhost:9000"
     ml_service_timeout_seconds: float = 2.5
+    model_path: str = "app/ml_models/best.pt"
+    detection_conf_threshold: float = 0.35
+    detection_iou_threshold: float = 0.45
+    detection_max_det: int = 50
+    detection_autotag_threshold: float = 0.6
+    detection_strict_mode: bool = False
 
     openai_api_key: str | None = None
     openai_api_base: str = "https://api.openai.com/v1"

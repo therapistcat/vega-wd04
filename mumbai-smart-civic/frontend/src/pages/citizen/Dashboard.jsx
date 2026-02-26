@@ -12,6 +12,7 @@ import {
 import { SkeletonBanner, SkeletonStats } from '../../components/Skeleton';
 import CameraCapture from '../../components/CameraCapture';
 import ReportDetailsModal from '../../components/ReportDetailsModal';
+import Button from '../../components/ui/Button';
 import api from '../../utils/api';
 
 const BANNER_IMG = 'https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=2500&auto=format&fit=crop';
@@ -24,6 +25,7 @@ const CATEGORY_OPTIONS = [
     { value: 'electricity', label: 'Electricity' },
     { value: 'sewage', label: 'Sewage' },
 ];
+const DETECTION_VERIFY_THRESHOLD = 0.5;
 
 function toErrorMessage(err, fallback = 'Something went wrong') {
     const detail = err?.response?.data?.detail;
@@ -55,6 +57,8 @@ export default function CitizenDashboard() {
     const [longitude, setLongitude] = useState('');
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState('');
+    const [detectingImage, setDetectingImage] = useState(false);
+    const [imageDetections, setImageDetections] = useState([]);
     const [locating, setLocating] = useState(false);
     const [locationHint, setLocationHint] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -174,6 +178,36 @@ export default function CitizenDashboard() {
             .sort((a, b) => b.count - a.count);
     }, [myComplaints]);
 
+    const detectionSummary = useMemo(() => {
+        if (!imageDetections.length) {
+            return {
+                predictedClass: null,
+                confidence: 0,
+                verified: false,
+                aligned: false,
+                statusLabel: 'No issue detected',
+            };
+        }
+        const top = [...imageDetections].sort(
+            (a, b) => Number(b?.confidence || 0) - Number(a?.confidence || 0),
+        )[0];
+
+        const predictedClass = String(top?.class || '').toLowerCase();
+        const confidence = Number(top?.confidence || 0);
+        const verified = confidence >= DETECTION_VERIFY_THRESHOLD && ['garbage', 'pothole'].includes(predictedClass);
+        const selectedCategory = String(category || '').toLowerCase();
+        const categoryAlias = selectedCategory === 'road' ? 'pothole' : selectedCategory;
+        const aligned = verified && categoryAlias === predictedClass;
+        const statusLabel = verified ? 'Verified by AI' : 'Needs manual review';
+        return {
+            predictedClass,
+            confidence,
+            verified,
+            aligned,
+            statusLabel,
+        };
+    }, [imageDetections, category]);
+
     const requestLiveLocation = () => {
         if (!navigator.geolocation) {
             setLocationHint('Geolocation is not supported in this browser');
@@ -211,11 +245,13 @@ export default function CitizenDashboard() {
     const handleImageChange = (e) => {
         const file = e.target.files?.[0] || null;
         setImageFile(file);
+        setImageDetections([]);
         if (imagePreview) {
             URL.revokeObjectURL(imagePreview);
         }
         if (file) {
             setImagePreview(URL.createObjectURL(file));
+            runImageDetection(file);
         } else {
             setImagePreview('');
         }
@@ -223,13 +259,33 @@ export default function CitizenDashboard() {
 
     const handleCameraCapture = (file) => {
         setImageFile(file);
+        setImageDetections([]);
         if (imagePreview) {
             URL.revokeObjectURL(imagePreview);
         }
         if (file) {
             setImagePreview(URL.createObjectURL(file));
+            runImageDetection(file);
         } else {
             setImagePreview('');
+        }
+    };
+
+    const runImageDetection = async (file) => {
+        if (!file) return;
+        setDetectingImage(true);
+        try {
+            const formData = new FormData();
+            formData.append('image', file);
+            const res = await api.post('/detect', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            const detections = Array.isArray(res?.data?.detections) ? res.data.detections : [];
+            setImageDetections(detections);
+        } catch {
+            setImageDetections([]);
+        } finally {
+            setDetectingImage(false);
         }
     };
 
@@ -246,6 +302,7 @@ export default function CitizenDashboard() {
             URL.revokeObjectURL(imagePreview);
         }
         setImagePreview('');
+        setImageDetections([]);
         setLocationHint('');
     };
 
@@ -377,16 +434,12 @@ export default function CitizenDashboard() {
                 </a>
             </div>
 
-            {error && (
-                <div style={{ marginBottom: 14, color: '#b91c1c', fontSize: 13, fontWeight: 600 }}>
-                    {error}
-                </div>
-            )}
+            {error && <div className="dashboard-error">{error}</div>}
 
             <div className="dashboard-grid">
                 <div className="card-stat-glass">
                     <div className="card-header-flex">
-                        <div className="card-icon-box" style={{ background: 'var(--info-bg)', color: 'var(--info)' }}>
+                        <div className="card-icon-box stat-icon-info">
                             <MdReport />
                         </div>
                     </div>
@@ -395,7 +448,7 @@ export default function CitizenDashboard() {
                 </div>
                 <div className="card-stat-glass">
                     <div className="card-header-flex">
-                        <div className="card-icon-box" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>
+                        <div className="card-icon-box stat-icon-success">
                             <MdCheckCircle />
                         </div>
                     </div>
@@ -404,7 +457,7 @@ export default function CitizenDashboard() {
                 </div>
                 <div className="card-stat-glass">
                     <div className="card-header-flex">
-                        <div className="card-icon-box" style={{ background: 'var(--warning-bg)', color: 'var(--warning)' }}>
+                        <div className="card-icon-box stat-icon-warning">
                             <MdPending />
                         </div>
                     </div>
@@ -413,7 +466,7 @@ export default function CitizenDashboard() {
                 </div>
                 <div className="card-stat-glass">
                     <div className="card-header-flex">
-                        <div className="card-icon-box" style={{ background: 'rgba(16, 185, 129, 0.12)', color: 'var(--success)' }}>
+                        <div className="card-icon-box stat-icon-trend">
                             <MdTrendingUp />
                         </div>
                     </div>
@@ -424,12 +477,13 @@ export default function CitizenDashboard() {
 
             <div className="dashboard-shell">
                 <div className="dashboard-left">
-                    <div className="table-glass-container" style={{ marginBottom: 18 }}>
+                    <div className="table-glass-container dashboard-panel-gap">
                         <div className="dash-section-head">
                             <h3>Quick Complaint</h3>
-                            <button
+                            <Button
                                 type="button"
-                                className={`btn ${showComposer ? 'btn-ghost' : 'btn-primary-filled'}`}
+                                variant={showComposer ? 'ghost' : 'primary'}
+                                size="sm"
                                 onClick={() => {
                                     const next = !showComposer;
                                     setShowComposer(next);
@@ -437,7 +491,7 @@ export default function CitizenDashboard() {
                                 }}
                             >
                                 {showComposer ? 'Close' : 'Report Issue'}
-                            </button>
+                            </Button>
                         </div>
 
                         {showComposer && (
@@ -517,21 +571,22 @@ export default function CitizenDashboard() {
                                     </div>
 
                                     <div className="composer-actions">
-                                        <button
+                                        <Button
                                             type="button"
-                                            className="btn btn-ghost"
+                                            variant="ghost"
+                                            size="sm"
                                             disabled={locating}
                                             onClick={requestLiveLocation}
                                         >
                                             <MdMyLocation /> {locating ? 'Locating...' : 'Use Live Location'}
-                                        </button>
+                                        </Button>
                                         <div className="location-hint">{locationHint || 'Coordinates are optional. Landmark is required.'}</div>
                                     </div>
 
                                     <div className="form-group">
                                         <label htmlFor="dash-image">Image Evidence (mandatory)</label>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                        <div className="composer-upload-row">
+                                            <span className="composer-upload-hint">
                                                 Upload from files or capture live from camera.
                                             </span>
                                             <CameraCapture onCapture={handleCameraCapture} />
@@ -551,14 +606,53 @@ export default function CitizenDashboard() {
                                             <img src={imagePreview} alt="Preview" />
                                         </div>
                                     )}
+                                    {(detectingImage || imageFile) && (
+                                        <div className="ai-detect-panel">
+                                            <div className="ai-detect-label">AI Verification</div>
+                                            {detectingImage && (
+                                                <div className="ai-detect-loading">Analyzing image...</div>
+                                            )}
+                                            {!detectingImage && imageDetections.length === 0 && (
+                                                <div className="ai-detect-empty">No clear garbage/pothole found in this image.</div>
+                                            )}
+                                            {!detectingImage && imageDetections.length > 0 && (
+                                                <>
+                                                    <div className="ai-detect-status-row">
+                                                        <span className={`ai-detect-status ${detectionSummary.verified ? 'ok' : 'review'}`}>
+                                                            {detectionSummary.statusLabel}
+                                                        </span>
+                                                    </div>
+                                                    <div className="ai-detect-summary ai-detect-summary-compact">
+                                                        <div className="ai-detect-summary-row">
+                                                            <span className="ai-detect-summary-key">Prediction</span>
+                                                            <span className="ai-detect-summary-value">
+                                                                {detectionSummary.predictedClass || '-'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="ai-detect-summary-row">
+                                                            <span className="ai-detect-summary-key">Confidence</span>
+                                                            <span className="ai-detect-summary-value">
+                                                                {Math.round(detectionSummary.confidence * 100)}%
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    {!detectionSummary.aligned && (
+                                                        <div className="ai-detect-warning">
+                                                            Selected category may not match the detected issue.
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
 
                                     <div className="composer-bottom">
                                         <div className="route-chip">
                                             Routed to: <strong>{routedDepartment}</strong>
                                         </div>
-                                        <button type="submit" className="btn btn-success" disabled={submitting}>
+                                        <Button type="submit" variant="success" size="sm" disabled={submitting}>
                                             <MdPhotoCamera /> {submitting ? 'Submitting...' : 'Submit Complaint'}
-                                        </button>
+                                        </Button>
                                     </div>
                                 </form>
                             </div>
@@ -616,11 +710,11 @@ export default function CitizenDashboard() {
                 </div>
 
                 <div className="dashboard-right">
-                    <div className="table-glass-container" style={{ marginBottom: 16 }}>
+                    <div className="table-glass-container dashboard-panel-tight-gap">
                         <div className="dash-section-head">
                             <h3>Area Report Search</h3>
                         </div>
-                        <div style={{ padding: 14 }}>
+                        <div className="area-panel-body">
                             <form
                                 onSubmit={(e) => {
                                     e.preventDefault();
@@ -645,61 +739,56 @@ export default function CitizenDashboard() {
                                     <option value="In Progress">In Progress</option>
                                     <option value="Resolved">Resolved</option>
                                 </select>
-                                <button type="submit" className="btn btn-primary-filled" disabled={areaLoading}>
+                                <Button type="submit" size="sm" disabled={areaLoading}>
                                     {areaLoading ? 'Searching...' : 'Search'}
-                                </button>
+                                </Button>
                             </form>
 
                             <div className="area-summary-grid">
-                                <div className="glass-panel" style={{ padding: 10 }}>
-                                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total</div>
-                                    <div style={{ fontWeight: 700 }}>{areaData.summary.total_reports}</div>
+                                <div className="glass-panel area-summary-card">
+                                    <div className="area-summary-label">Total</div>
+                                    <div className="area-summary-value">{areaData.summary.total_reports}</div>
                                 </div>
-                                <div className="glass-panel" style={{ padding: 10 }}>
-                                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Open</div>
-                                    <div style={{ fontWeight: 700 }}>{areaData.summary.open_count}</div>
+                                <div className="glass-panel area-summary-card">
+                                    <div className="area-summary-label">Open</div>
+                                    <div className="area-summary-value">{areaData.summary.open_count}</div>
                                 </div>
-                                <div className="glass-panel" style={{ padding: 10 }}>
-                                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>In Progress</div>
-                                    <div style={{ fontWeight: 700 }}>{areaData.summary.in_progress_count}</div>
+                                <div className="glass-panel area-summary-card">
+                                    <div className="area-summary-label">In Progress</div>
+                                    <div className="area-summary-value">{areaData.summary.in_progress_count}</div>
                                 </div>
-                                <div className="glass-panel" style={{ padding: 10 }}>
-                                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Resolved</div>
-                                    <div style={{ fontWeight: 700 }}>{areaData.summary.resolved_count}</div>
+                                <div className="glass-panel area-summary-card">
+                                    <div className="area-summary-label">Resolved</div>
+                                    <div className="area-summary-value">{areaData.summary.resolved_count}</div>
                                 </div>
                             </div>
 
                             <div className="area-reports-list">
                                 {areaData.reports.length === 0 && (
-                                    <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No reports found for this area.</div>
+                                    <div className="area-empty-state">No reports found for this area.</div>
                                 )}
                                 {areaData.reports.map((r) => (
                                     <button
                                         key={r.id}
                                         type="button"
-                                        className="glass-panel"
+                                        className={`glass-panel area-report-item ${selectedReport?.id === r.id ? 'active' : ''}`}
                                         onClick={() => openReportDetails(r.id)}
-                                        style={{
-                                            padding: 10,
-                                            textAlign: 'left',
-                                            border: selectedReport?.id === r.id ? '1px solid rgba(37,99,235,0.5)' : undefined,
-                                        }}
                                     >
-                                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.ward} | {r.status}</div>
-                                        <div style={{ fontSize: 13, fontWeight: 700 }}>{r.description?.slice(0, 75) || 'Report'}</div>
-                                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                        <div className="area-report-meta">{r.ward} | {r.status}</div>
+                                        <div className="area-report-title">{r.description?.slice(0, 75) || 'Report'}</div>
+                                        <div className="area-report-reporter">
                                             By: {r.reporter?.name || 'Unknown'} ({r.reporter?.email || 'N/A'})
                                         </div>
                                     </button>
                                 ))}
                             </div>
 
-                            <div className="glass-panel" style={{ marginTop: 12, padding: 12 }}>
-                                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                            <div className="glass-panel area-help-card">
+                                <div className="area-help-text">
                                     Click any report above to open full details in a popup.
                                 </div>
                                 {detailsLoading && (
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+                                    <div className="area-help-loading">
                                         Loading report details...
                                     </div>
                                 )}
@@ -711,15 +800,15 @@ export default function CitizenDashboard() {
                         <div className="dash-section-head">
                             <h3>Department Routing</h3>
                         </div>
-                        <div style={{ padding: 16, display: 'grid', gap: 10 }}>
+                        <div className="department-routing-wrap">
                             {departmentSummary.length === 0 && (
-                                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No complaints filed yet.</div>
+                                <div className="area-empty-state">No complaints filed yet.</div>
                             )}
                             {departmentSummary.map((row) => (
-                                <div key={row.department} className="glass-panel" style={{ padding: 12 }}>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Department</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700 }}>{row.department}</div>
-                                    <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                                <div key={row.department} className="glass-panel department-card">
+                                    <div className="department-card-label">Department</div>
+                                    <div className="department-card-name">{row.department}</div>
+                                    <div className="department-card-count">
                                         Complaints filed: {row.count}
                                     </div>
                                 </div>

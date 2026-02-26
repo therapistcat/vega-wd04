@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import Button from '../components/ui/Button';
+import InputField from '../components/ui/InputField';
+import Card from '../components/ui/Card';
 
 const IMAGES = [
     'https://images.unsplash.com/photo-1570168007204-dfb528c6958f?q=90&w=2535&auto=format&fit=crop',
@@ -111,125 +114,97 @@ export default function Login() {
                 <div className="carousel-overlay" />
             </div>
 
-            <div className="login-card-glass">
+            <Card glass className="login-card-glass">
                 <div className="login-header">
-                    <div style={{
-                        width: 72, height: 72, background: 'linear-gradient(135deg, #ea580c, #f59e0b)',
-                        borderRadius: '20px', color: '#fff', fontSize: '28px', fontWeight: '800',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px',
-                        boxShadow: '0 15px 35px -5px rgba(234,88,12,0.4)'
-                    }}>
-                        SC
-                    </div>
+                    <div className="auth-brand-mark">SC</div>
                     <h1>Smart Civic</h1>
                     <p>Mumbai Civic Portal</p>
                 </div>
 
                 {error && (
-                    <div style={{
-                        background: 'var(--danger-bg)', color: '#DC2626', padding: '12px',
-                        borderRadius: '12px', marginBottom: '20px', fontSize: '13px', fontWeight: '600',
-                        border: '1px solid rgba(220,38,38,0.2)', textAlign: 'center'
-                    }}>
+                    <div className="form-alert form-alert-danger" role="alert" aria-live="assertive">
                         {error}
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit}>
-                    <div className="form-input-group">
-                        <label htmlFor="login-as">Login As</label>
-                        <select
-                            id="login-as"
-                            className="form-input"
-                            value={loginAs}
-                            onChange={(e) => setLoginAs(e.target.value)}
-                        >
+                <form onSubmit={handleSubmit} className="auth-form">
+                    <InputField
+                        id="login-as"
+                        label="Login As"
+                        as="select"
+                        value={loginAs}
+                        onChange={(e) => setLoginAs(e.target.value)}
+                    >
                             <option value="citizen">Citizen</option>
                             <option value="authority">Authority</option>
-                        </select>
-                    </div>
+                    </InputField>
 
-                    <div className="form-input-group">
-                        <label htmlFor="email">Email Address</label>
-                        <input
-                            id="email"
-                            type="email"
-                            className="form-input"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                        />
-                    </div>
+                    <InputField
+                        id="email"
+                        type="email"
+                        label="Email Address"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                    />
 
-                    <div className="form-input-group">
-                        <label htmlFor="password">Password</label>
-                        <input
-                            id="password"
-                            type="password"
-                            className="form-input"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                        />
-                    </div>
+                    <InputField
+                        id="password"
+                        type="password"
+                        label="Password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                    />
 
                     {loginAs === 'authority' && (
-                        <div className="form-input-group">
-                            <label htmlFor="authority-code">Authority Code</label>
-                            <input
-                                id="authority-code"
-                                type="text"
-                                className="form-input"
-                                value={authorityCode}
-                                onChange={(e) => setAuthorityCode(e.target.value)}
-                                required
-                            />
-                        </div>
+                        <InputField
+                            id="authority-code"
+                            type="text"
+                            label="Authority Code"
+                            value={authorityCode}
+                            onChange={(e) => setAuthorityCode(e.target.value)}
+                            required
+                        />
                     )}
 
-                    <button type="submit" className="btn-gradient" disabled={loading}>
+                    <Button type="submit" fullWidth loading={loading}>
                         {loading ? 'Authenticating...' : 'Login'}
-                    </button>
+                    </Button>
                 </form>
 
-                <div style={{ marginTop: 20, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+                <div className="auth-help-text">
                     Authority rank is validated by authority code during login.
                 </div>
 
-                <div style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid rgba(148,163,184,0.15)' }}>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginBottom: 12 }}>
+                <div className="auth-quick-fill">
+                    <p className="auth-quick-fill-label">
                         QUICK FILL
                     </p>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                        <button
+                    <div className="auth-quick-fill-row">
+                        <Button
                             type="button"
+                            variant="secondary"
                             onClick={() => fillDemo('citizen')}
-                            style={{
-                                flex: 1, padding: '10px', borderRadius: '12px', border: '1px solid var(--border-default)',
-                                background: '#fff', fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)',
-                                transition: 'all 0.2s'
-                            }}
+                            fullWidth
                         >
                             Citizen
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                             type="button"
+                            variant="secondary"
                             onClick={() => fillDemo('authority')}
-                            style={{
-                                flex: 1, padding: '10px', borderRadius: '12px', border: '1px solid var(--border-default)',
-                                background: '#fff', fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)',
-                                transition: 'all 0.2s'
-                            }}
+                            fullWidth
                         >
                             Authority
-                        </button>
+                        </Button>
                     </div>
                 </div>
 
-                <div style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
-                    New user? <Link to="/register" style={{ color: 'var(--primary)', fontWeight: 700 }}>Create account</Link>
+                <div className="auth-footer-text">
+                    New user? <Link to="/register" className="auth-link">Create account</Link>
                 </div>
-            </div>
+            </Card>
         </div>
     );
 }

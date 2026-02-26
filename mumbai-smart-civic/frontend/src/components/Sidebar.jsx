@@ -47,13 +47,8 @@ export default function Sidebar({ role, open, onClose }) {
     return (
         <aside className={`sidebar-glass ${open ? 'open' : ''}`}>
             <div className="sidebar-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{
-                        width: 36, height: 36, borderRadius: 10,
-                        background: 'linear-gradient(135deg, var(--primary), var(--primary-light))',
-                        color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontWeight: 'bold', boxShadow: '0 4px 10px rgba(37, 99, 235, 0.2)'
-                    }}>SC</div>
+                <div className="sidebar-brand-row">
+                    <div className="sidebar-brand-mark">SC</div>
                     <div className="brand-text">
                         <h2>Smart Civic</h2>
                         <span>{isAuthority ? 'Authority Portal' : 'Citizen Portal'}</span>
@@ -75,11 +70,10 @@ export default function Sidebar({ role, open, onClose }) {
                 ))}
             </nav>
 
-            <div style={{ padding: 20, borderTop: '1px solid rgba(148, 163, 184, 0.1)' }}>
+            <div className="sidebar-footer">
                 <button
                     onClick={handleLogout}
-                    className="nav-link-glass"
-                    style={{ color: 'var(--danger)', width: '100%', justifyContent: 'flex-start' }}
+                    className="nav-link-glass nav-link-danger"
                 >
                     <MdLogout />
                     <span>Logout</span>

@@ -29,24 +29,19 @@ export default function Navbar({ onMenuClick }) {
 
     return (
         <header className="navbar-glass">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <button onClick={onMenuClick} style={{ padding: 8, display: 'flex', color: 'var(--text-secondary)' }} className="mobile-menu-btn">
+            <div className="navbar-left">
+                <button onClick={onMenuClick} className="mobile-menu-btn navbar-menu-btn" aria-label="Open menu">
                     <MdMenu size={24} />
                 </button>
                 <h1 className="navbar-title">{title}</h1>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ textAlign: 'right', flexDirection: 'column' }} className="user-info-desktop">
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{user?.name || 'User'}</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{roleLabel}</span>
+            <div className="navbar-right">
+                <div className="user-info-desktop navbar-user-copy">
+                    <span className="navbar-user-name">{user?.name || 'User'}</span>
+                    <span className="navbar-user-role">{roleLabel}</span>
                 </div>
-                <div style={{
-                    width: 36, height: 36, borderRadius: '50%',
-                    background: 'rgba(37, 99, 235, 0.1)', color: 'var(--primary)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontWeight: 700, fontSize: 13, border: '1px solid rgba(37, 99, 235, 0.2)'
-                }}>
+                <div className="navbar-avatar">
                     {initials}
                 </div>
             </div>

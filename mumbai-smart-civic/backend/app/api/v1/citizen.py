@@ -30,6 +30,7 @@ from app.schemas.complaint_schema import (
 from app.services.duplicate_service import resolve_duplicate_group
 from app.services.geo_service import run_st_dbscan_clustering, update_intensity_scores
 from app.services.ml_service import compute_priority_score, predict_department
+from app.services.complaint_service import enrich_complaint_with_detection
 from app.services.spatial_service import compute_spatial_analytics
 
 
@@ -325,7 +326,17 @@ async def create_complaint(
         ward=ward,
     )
     image_url = await _save_uploaded_image(image)
-    department = await predict_department(description, category)
+    detection_enrichment = await enrich_complaint_with_detection(
+        image_url=image_url,
+        user_category=category,
+    )
+    if detection_enrichment.get("should_reject"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(detection_enrichment.get("reject_reason") or "Invalid complaint image"),
+        )
+    final_category = str(detection_enrichment["final_category"])
+    department = await predict_department(description, final_category)
     duplicate_group = await resolve_duplicate_group(
         db,
         lng=resolved_lng,
@@ -335,15 +346,17 @@ async def create_complaint(
     complaint_doc = build_complaint_document(
         user_id=current_user["id"],
         description=description,
-        category=category,
+        category=final_category,
         ward=ward,
         lng=resolved_lng,
         lat=resolved_lat,
-        priority_score=compute_priority_score(category),
+        priority_score=compute_priority_score(final_category),
         predicted_department=department,
         duplicate_group=duplicate_group,
         image_url=image_url,
     )
+    complaint_doc["category_source"] = detection_enrichment["category_source"]
+    complaint_doc["vision_detection"] = detection_enrichment["vision_detection"]
     if current_user.get("name"):
         complaint_doc["reported_by_name"] = str(current_user["name"]).strip()
     if landmark and landmark.strip():

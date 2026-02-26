@@ -1,123 +1,41 @@
 from __future__ import annotations
 
-import math
-import re
-from difflib import SequenceMatcher
+from datetime import datetime, timezone
+from math import atan2, cos, radians, sin, sqrt
 
 
-_WORD_RE = re.compile(r"[a-z0-9]+")
-_STOPWORDS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "as",
-    "at",
-    "be",
-    "by",
-    "for",
-    "from",
-    "has",
-    "i",
-    "in",
-    "is",
-    "it",
-    "my",
-    "of",
-    "on",
-    "or",
-    "that",
-    "the",
-    "there",
-    "this",
-    "to",
-    "was",
-    "we",
-    "with",
-}
+EARTH_RADIUS_METERS = 6371000.0
 
 
-def normalize_text(value: str | None) -> str:
-    if not value:
-        return ""
-    return " ".join(_WORD_RE.findall(value.lower()))
+def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    d_lat = radians(lat2 - lat1)
+    d_lon = radians(lon2 - lon1)
+    a = (
+        sin(d_lat / 2) ** 2
+        + cos(radians(lat1)) * cos(radians(lat2)) * sin(d_lon / 2) ** 2
+    )
+    c = 2 * atan2(sqrt(a), sqrt(max(1e-12, 1 - a)))
+    return EARTH_RADIUS_METERS * c
 
 
-def tokenize(value: str | None) -> set[str]:
-    normalized = normalize_text(value)
-    if not normalized:
-        return set()
-    return {
-        token
-        for token in normalized.split(" ")
-        if token and token not in _STOPWORDS and len(token) > 1
-    }
-
-
-def jaccard_similarity(text_a: str | None, text_b: str | None) -> float:
-    tokens_a = tokenize(text_a)
-    tokens_b = tokenize(text_b)
-    if not tokens_a or not tokens_b:
-        return 0.0
-    overlap = len(tokens_a.intersection(tokens_b))
-    union = len(tokens_a.union(tokens_b))
-    if union == 0:
-        return 0.0
-    return float(overlap) / float(union)
-
-
-def sequence_similarity(text_a: str | None, text_b: str | None) -> float:
-    a = normalize_text(text_a)
-    b = normalize_text(text_b)
-    if not a or not b:
-        return 0.0
-    return SequenceMatcher(None, a, b).ratio()
-
-
-def description_similarity(text_a: str | None, text_b: str | None) -> float:
-    seq_score = sequence_similarity(text_a, text_b)
-    jac_score = jaccard_similarity(text_a, text_b)
-    # Sequence captures phrasing, Jaccard captures keyword overlap.
-    return (0.6 * seq_score) + (0.4 * jac_score)
-
-
-def _distance_score(distance_m: float | None, radius_m: float) -> float:
-    if distance_m is None:
-        return 0.0
-    if radius_m <= 0:
-        return 0.0
-    ratio = min(max(distance_m, 0.0) / radius_m, 1.0)
-    return 1.0 - ratio
-
-
-def duplicate_score(
+def is_duplicate_candidate(
     *,
-    new_description: str,
-    old_description: str,
-    new_category: str | None,
-    old_category: str | None,
-    new_department: str | None,
-    old_department: str | None,
-    distance_m: float | None,
-    radius_m: float,
-) -> float:
-    text_score = description_similarity(new_description, old_description)
-    category_match = 1.0 if normalize_text(new_category) == normalize_text(old_category) else 0.0
-    department_match = (
-        1.0 if normalize_text(new_department) == normalize_text(old_department) else 0.0
-    )
-    geo_score = _distance_score(distance_m, radius_m)
-
-    score = (
-        (0.65 * text_score)
-        + (0.15 * category_match)
-        + (0.10 * department_match)
-        + (0.10 * geo_score)
-    )
-    return round(min(max(score, 0.0), 1.0), 4)
-
-
-def is_duplicate(score: float, threshold: float) -> bool:
-    if math.isnan(score):
+    new_lat: float,
+    new_lng: float,
+    existing_lat: float,
+    existing_lng: float,
+    existing_created_at: datetime | None,
+    radius_meters: int,
+    window_hours: int,
+) -> bool:
+    distance = _haversine_m(new_lat, new_lng, existing_lat, existing_lng)
+    if distance > float(radius_meters):
         return False
-    return score >= threshold
+
+    if not isinstance(existing_created_at, datetime):
+        return True
+    if existing_created_at.tzinfo is None:
+        existing_created_at = existing_created_at.replace(tzinfo=timezone.utc)
+    age_h = (datetime.now(timezone.utc) - existing_created_at).total_seconds() / 3600.0
+    return age_h <= float(window_hours)
+

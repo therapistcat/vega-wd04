@@ -27,6 +27,8 @@ async def predict_department(description: str, category: str) -> str:
 def compute_priority_score(category: str, created_at: datetime | None = None) -> float:
     severity_weight = {
         "garbage": 0.75,
+        "waste": 0.75,
+        "pothole": 0.72,
         "water": 0.8,
         "road": 0.65,
         "electricity": 0.85,
