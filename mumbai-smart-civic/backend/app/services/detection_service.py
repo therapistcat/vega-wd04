@@ -37,6 +37,22 @@ class DetectionService:
     def enabled(self) -> bool:
         return self._enabled
 
+    def _class_conf_threshold(self, class_name: str) -> float:
+        name = str(class_name or "").strip().lower()
+        if name == "garbage" and settings.detection_conf_threshold_garbage is not None:
+            return float(settings.detection_conf_threshold_garbage)
+        if name == "pothole" and settings.detection_conf_threshold_pothole is not None:
+            return float(settings.detection_conf_threshold_pothole)
+        return float(settings.detection_conf_threshold)
+
+    def _predict_conf_floor(self) -> float:
+        values: list[float] = [float(settings.detection_conf_threshold)]
+        if settings.detection_conf_threshold_garbage is not None:
+            values.append(float(settings.detection_conf_threshold_garbage))
+        if settings.detection_conf_threshold_pothole is not None:
+            values.append(float(settings.detection_conf_threshold_pothole))
+        return max(0.001, min(values))
+
     def load_model(self) -> None:
         if self._enabled:
             return
@@ -81,7 +97,7 @@ class DetectionService:
 
         results = self._model.predict(
             source=image_bgr,
-            conf=settings.detection_conf_threshold,
+            conf=self._predict_conf_floor(),
             iou=settings.detection_iou_threshold,
             max_det=settings.detection_max_det,
             verbose=False,
@@ -102,13 +118,17 @@ class DetectionService:
         for idx, bbox in enumerate(xyxy):
             class_idx = int(classes[idx])
             class_name = self._names.get(class_idx, str(class_idx))
+            confidence = float(confs[idx])
+            if confidence < self._class_conf_threshold(class_name):
+                continue
             detections.append(
                 {
                     "class": class_name,
-                    "confidence": round(float(confs[idx]), 4),
+                    "confidence": round(confidence, 4),
                     "bbox": [round(float(v), 2) for v in bbox],
                 }
             )
+        detections.sort(key=lambda row: float(row.get("confidence", 0.0)), reverse=True)
         return detections
 
     async def detect_bytes(self, raw: bytes) -> list[dict[str, Any]]:

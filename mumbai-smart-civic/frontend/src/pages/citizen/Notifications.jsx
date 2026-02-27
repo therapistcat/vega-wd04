@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { MdCampaign, MdWarningAmber } from 'react-icons/md';
 import api from '../../utils/api';
 
+const NOTIFICATIONS_REFRESH_MS = 15000;
+
 const FALLBACK_ANNOUNCEMENTS = [
     {
         id: 'fallback-1',
@@ -42,19 +44,43 @@ export default function Notifications() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    useEffect(() => {
-        (async () => {
-            try {
-                const res = await api.get('/c/announcements');
-                const rows = Array.isArray(res.data) ? res.data : [];
-                setAnnouncements(rows.length > 0 ? rows : FALLBACK_ANNOUNCEMENTS);
-            } catch (err) {
-                setAnnouncements(FALLBACK_ANNOUNCEMENTS);
-                setError(toErrorMessage(err));
-            } finally {
-                setLoading(false);
+    const fetchAnnouncements = async (silent = false) => {
+        if (!silent) setLoading(true);
+        try {
+            const [primary, fallback] = await Promise.allSettled([
+                api.get('/c/notifications'),
+                api.get('/c/announcements'),
+            ]);
+
+            const primaryRows = primary.status === 'fulfilled' && Array.isArray(primary.value?.data)
+                ? primary.value.data
+                : [];
+            const fallbackRows = fallback.status === 'fulfilled' && Array.isArray(fallback.value?.data)
+                ? fallback.value.data
+                : [];
+
+            const rows = primaryRows.length > 0 ? primaryRows : fallbackRows;
+            setAnnouncements(rows.length > 0 ? rows : FALLBACK_ANNOUNCEMENTS);
+
+            if (primary.status === 'rejected' && fallback.status === 'rejected') {
+                setError(toErrorMessage(primary.reason || fallback.reason));
+            } else {
+                setError('');
             }
-        })();
+        } catch (err) {
+            setAnnouncements(FALLBACK_ANNOUNCEMENTS);
+            setError(toErrorMessage(err));
+        } finally {
+            if (!silent) setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchAnnouncements(false);
+        const timer = setInterval(() => {
+            fetchAnnouncements(true);
+        }, NOTIFICATIONS_REFRESH_MS);
+        return () => clearInterval(timer);
     }, []);
 
     const counts = useMemo(() => {

@@ -4,6 +4,8 @@ import api from '../../utils/api';
 import ReportDetailsModal from '../../components/ReportDetailsModal';
 import { SkeletonStats } from '../../components/Skeleton';
 
+const REFRESH_INTERVAL_MS = 15000;
+
 function toErrorMessage(err, fallback = 'Unable to load progress data') {
     const detail = err?.response?.data?.detail;
     if (typeof detail === 'string' && detail.trim()) return detail;
@@ -16,7 +18,7 @@ function toErrorMessage(err, fallback = 'Unable to load progress data') {
 }
 
 export default function ProgressDashboard() {
-    const [area, setArea] = useState('M Ward');
+    const [area, setArea] = useState('');
     const [loading, setLoading] = useState(true);
     const [fetching, setFetching] = useState(false);
     const [error, setError] = useState('');
@@ -24,9 +26,9 @@ export default function ProgressDashboard() {
     const [selectedReport, setSelectedReport] = useState(null);
     const [showModal, setShowModal] = useState(false);
 
-    const load = async (areaValue = area, initial = false) => {
+    const load = async (areaValue = area, initial = false, silent = false) => {
         if (initial) setLoading(true);
-        else setFetching(true);
+        else if (!silent) setFetching(true);
         setError('');
         try {
             const res = await api.get('/c/progress/overview', {
@@ -41,13 +43,20 @@ export default function ProgressDashboard() {
             setData(null);
         } finally {
             setLoading(false);
-            setFetching(false);
+            if (!silent) setFetching(false);
         }
     };
 
     useEffect(() => {
-        load('M Ward', true);
+        load('', true);
     }, []);
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            load(area, false, true);
+        }, REFRESH_INTERVAL_MS);
+        return () => clearInterval(timer);
+    }, [area]);
 
     const progressWidth = useMemo(() => {
         const value = Number(data?.resolution_rate || 0);

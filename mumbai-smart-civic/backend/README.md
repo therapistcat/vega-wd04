@@ -342,11 +342,40 @@ cd mumbai-smart-civic/backend
 python -m compileall app scripts
 ```
 
+Train improved garbage/pothole detector:
+```powershell
+cd mumbai-smart-civic/backend
+python scripts/train_detection_model.py `
+  --garbage-yolo-dir ml_data/garbage_detection `
+  --epochs 80 `
+  --imgsz 896 `
+  --batch 8 `
+  --cache
+```
+
+Optional detection threshold tuning in `.env` (from calibration output):
+```env
+DETECTION_AUTOTAG_THRESHOLD_GARBAGE=0.60
+DETECTION_CONF_THRESHOLD_GARBAGE=0.35
+```
+
 Frontend build check:
 ```powershell
 cd mumbai-smart-civic/frontend
 npm run build
 ```
+
+## Data Needed To Improve Garbage Accuracy
+
+To push garbage detection accuracy higher, provide:
+1. 300-500 new Mumbai street images with garbage present (different wards, lighting, rain/night, camera angles).
+2. 300-500 hard negatives (clean roads, leaves, construction debris, puddles, shadows) with no garbage.
+3. Balanced object scale coverage:
+   - small distant garbage (20-60 px)
+   - medium curbside piles
+   - large dumps
+4. Bounding boxes in YOLO format (`class x_center y_center width height`) with class `garbage=0`.
+5. At least 25% mobile-camera low-quality frames (blur, compression, low light), because this is a common real-world failure mode.
 
 ## Troubleshooting
 

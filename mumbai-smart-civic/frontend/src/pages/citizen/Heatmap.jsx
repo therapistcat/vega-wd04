@@ -8,14 +8,6 @@ import { CircleMarker, Popup } from 'react-leaflet';
 
 const DEFAULT_CENTER = { lat: 19.048728, lng: 72.910852 };
 const REFRESH_INTERVAL_MS = 15000;
-const FORCED_HEAT_OFFSETS = [
-    { dLat: 0.0000, dLng: 0.0000, intensity: 0.95 },
-    { dLat: 0.0012, dLng: -0.0011, intensity: 0.88 },
-    { dLat: -0.0013, dLng: 0.0015, intensity: 0.82 },
-    { dLat: 0.0009, dLng: 0.0022, intensity: 0.73 },
-    { dLat: -0.0020, dLng: -0.0018, intensity: 0.69 },
-    { dLat: 0.0024, dLng: -0.0025, intensity: 0.65 },
-];
 
 function toErrorMessage(err, fallback = 'Unable to load heatmap data') {
     const detail = err?.response?.data?.detail;
@@ -46,14 +38,6 @@ function sanitizePoints(rawPoints) {
         .filter(Boolean);
 }
 
-function forcedSamplePoints(baseLat, baseLng) {
-    return FORCED_HEAT_OFFSETS.map((seed) => ({
-        lat: Number((baseLat + seed.dLat).toFixed(6)),
-        lng: Number((baseLng + seed.dLng).toFixed(6)),
-        intensity: seed.intensity,
-    }));
-}
-
 export default function Heatmap() {
     const [points, setPoints] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -61,7 +45,7 @@ export default function Heatmap() {
     const [center, setCenter] = useState([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
     const [lastUpdated, setLastUpdated] = useState(null);
     const [locationSource, setLocationSource] = useState('fallback');
-    const [areaQuery, setAreaQuery] = useState('M Ward');
+    const [areaQuery, setAreaQuery] = useState('');
     const [areaStatus, setAreaStatus] = useState('');
     const [areaLoading, setAreaLoading] = useState(false);
     const [areaData, setAreaData] = useState({
@@ -75,23 +59,19 @@ export default function Heatmap() {
 
     const fetchHeatmap = async (lat, lng, showLoader = false) => {
         if (showLoader) setLoading(true);
-        const fallback = forcedSamplePoints(lat, lng);
         try {
             const res = await api.get('/c/spatial-analytics', {
                 params: {
-                    lat,
-                    lng,
-                    radius_m: 3000,
-                    window_hours: 168,
+                    window_hours: 720,
                 },
             });
             const livePoints = sanitizePoints(res.data);
-            setPoints([...livePoints, ...fallback]);
+            setPoints(livePoints);
             setLastUpdated(new Date());
             setError('');
         } catch (err) {
-            setError(`${toErrorMessage(err)} | Showing sample hotspots`);
-            setPoints(fallback);
+            setError(toErrorMessage(err));
+            setPoints([]);
         } finally {
             setLoading(false);
         }
@@ -148,16 +128,12 @@ export default function Heatmap() {
     }, []);
 
     const loadAreaReports = async () => {
-        const [lat, lng] = centerRef.current;
         setAreaLoading(true);
         try {
             const res = await api.get('/c/reports/by-area', {
                 params: {
                     area: areaQuery || undefined,
                     status: areaStatus || undefined,
-                    lat,
-                    lng,
-                    radius_m: 2500,
                     limit: 120,
                 },
             });
@@ -209,7 +185,7 @@ export default function Heatmap() {
             <div style={{ marginBottom: 18 }}>
                 <h2 className="section-title">Complaint Heatmap</h2>
                 <p className="section-subtitle" style={{ marginBottom: 4 }}>
-                    Real-time MongoDB complaint intensity around your location.
+                    Real-time MongoDB complaint intensity fetched from backend records.
                 </p>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
                     {subtitle}

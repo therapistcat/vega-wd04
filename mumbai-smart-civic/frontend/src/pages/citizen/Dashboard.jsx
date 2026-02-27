@@ -26,6 +26,7 @@ const CATEGORY_OPTIONS = [
     { value: 'sewage', label: 'Sewage' },
 ];
 const DETECTION_VERIFY_THRESHOLD = 0.5;
+const DASHBOARD_REFRESH_MS = 15000;
 
 function toErrorMessage(err, fallback = 'Something went wrong') {
     const detail = err?.response?.data?.detail;
@@ -64,7 +65,7 @@ export default function CitizenDashboard() {
     const [submitting, setSubmitting] = useState(false);
     const [votingIds, setVotingIds] = useState([]);
     const [toast, setToast] = useState(null);
-    const [areaQuery, setAreaQuery] = useState('M Ward');
+    const [areaQuery, setAreaQuery] = useState('');
     const [areaStatus, setAreaStatus] = useState('');
     const [areaData, setAreaData] = useState({
         summary: { total_reports: 0, open_count: 0, in_progress_count: 0, resolved_count: 0 },
@@ -74,6 +75,13 @@ export default function CitizenDashboard() {
     const [detailsLoading, setDetailsLoading] = useState(false);
     const [selectedReport, setSelectedReport] = useState(null);
     const [showReportModal, setShowReportModal] = useState(false);
+    const [dailyPriority, setDailyPriority] = useState({
+        date: '',
+        has_data: false,
+        message: 'No reports detected today.',
+        score: null,
+        top_report: null,
+    });
 
     let user = null;
     try { user = JSON.parse(localStorage.getItem('user')); } catch { }
@@ -81,19 +89,34 @@ export default function CitizenDashboard() {
     const fetchDashboardData = async () => {
         setError('');
         try {
-            const [mineRes, feedRes, deptRes] = await Promise.all([
+            const [mineRes, feedRes, deptRes, priorityRes] = await Promise.all([
                 api.get('/c/complaints/me'),
                 api.get('/c/complaints/feed'),
                 api.get('/c/departments'),
+                api.get('/c/reports/priority-today'),
             ]);
             setMyComplaints(Array.isArray(mineRes.data) ? mineRes.data : []);
             setFeedComplaints(Array.isArray(feedRes.data) ? feedRes.data : []);
             setDepartments(Array.isArray(deptRes.data) ? deptRes.data : []);
+            setDailyPriority(priorityRes?.data || {
+                date: '',
+                has_data: false,
+                message: 'No reports detected today.',
+                score: null,
+                top_report: null,
+            });
         } catch (err) {
             setError(toErrorMessage(err, 'Unable to load dashboard data'));
             setMyComplaints([]);
             setFeedComplaints([]);
             setDepartments([]);
+            setDailyPriority({
+                date: '',
+                has_data: false,
+                message: 'No reports detected today.',
+                score: null,
+                top_report: null,
+            });
         } finally {
             setLoading(false);
         }
@@ -101,6 +124,13 @@ export default function CitizenDashboard() {
 
     useEffect(() => {
         fetchDashboardData();
+    }, []);
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            fetchDashboardData();
+        }, DASHBOARD_REFRESH_MS);
+        return () => clearInterval(timer);
     }, []);
 
     const loadAreaReports = async (query = areaQuery) => {
@@ -147,7 +177,7 @@ export default function CitizenDashboard() {
     };
 
     useEffect(() => {
-        loadAreaReports('M Ward');
+        loadAreaReports('');
     }, []);
 
     useEffect(() => {
@@ -392,6 +422,7 @@ export default function CitizenDashboard() {
             const updated = res.data;
             setFeedComplaints((prev) => prev.map((c) => (c.id === complaintId ? { ...c, ...updated } : c)));
             setMyComplaints((prev) => prev.map((c) => (c.id === complaintId ? { ...c, ...updated } : c)));
+            await fetchDashboardData();
         } catch {
             setFeedComplaints((prev) => prev.map((c) => (c.id === complaintId ? item : c)));
             setMyComplaints((prev) => prev.map((c) => (c.id === complaintId ? item : c)));
@@ -710,6 +741,41 @@ export default function CitizenDashboard() {
                 </div>
 
                 <div className="dashboard-right">
+                    <div className="table-glass-container" style={{ marginBottom: 14 }}>
+                        <div className="dash-section-head">
+                            <h3>Most Important Fix Today</h3>
+                            <span className="feed-count">{dailyPriority?.date || '-'}</span>
+                        </div>
+                        <div style={{ padding: 14, display: 'grid', gap: 10 }}>
+                            {!dailyPriority?.has_data && (
+                                <div className="area-empty-state">
+                                    {dailyPriority?.message || 'No reports detected today.'}
+                                </div>
+                            )}
+                            {dailyPriority?.has_data && dailyPriority?.top_report && (
+                                <button
+                                    type="button"
+                                    className="glass-panel area-report-item"
+                                    onClick={() => openReportDetails(dailyPriority.top_report.id)}
+                                >
+                                    <div className="area-report-meta">
+                                        {dailyPriority.top_report.ward} | {dailyPriority.top_report.status}
+                                    </div>
+                                    <div className="area-report-title">
+                                        {dailyPriority.top_report.description?.slice(0, 90) || 'Report'}
+                                    </div>
+                                    <div className="area-report-reporter">
+                                        Upvotes: {dailyPriority.top_report.upvotes_count || 0}
+                                        {' '}| Score: {dailyPriority.score ?? '-'}
+                                    </div>
+                                </button>
+                            )}
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                Updated live from database every {Math.round(DASHBOARD_REFRESH_MS / 1000)}s.
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="table-glass-container dashboard-panel-tight-gap">
                         <div className="dash-section-head">
                             <h3>Area Report Search</h3>

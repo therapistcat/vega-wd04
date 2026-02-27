@@ -14,15 +14,33 @@ def _normalize_category(value: str | None) -> str:
     return str(value or "").strip().lower()
 
 
+def _autotag_threshold_for(class_name: str) -> float:
+    normalized = _normalize_category(class_name)
+    if normalized == "garbage" and settings.detection_autotag_threshold_garbage is not None:
+        return float(settings.detection_autotag_threshold_garbage)
+    if normalized == "pothole" and settings.detection_autotag_threshold_pothole is not None:
+        return float(settings.detection_autotag_threshold_pothole)
+    return float(settings.detection_autotag_threshold)
+
+
 def _select_auto_category(detections: list[dict[str, Any]]) -> str | None:
     if not detections:
         return None
-    best = max(detections, key=lambda row: float(row.get("confidence", 0.0)))
-    best_class = _normalize_category(best.get("class"))
-    best_conf = float(best.get("confidence", 0.0))
-    if best_class in AUTO_TAG_SUPPORTED and best_conf >= settings.detection_autotag_threshold:
-        return best_class
-    return None
+
+    eligible: list[tuple[float, str]] = []
+    for row in detections:
+        class_name = _normalize_category(row.get("class"))
+        if class_name not in AUTO_TAG_SUPPORTED:
+            continue
+        confidence = float(row.get("confidence", 0.0))
+        if confidence >= _autotag_threshold_for(class_name):
+            eligible.append((confidence, class_name))
+
+    if not eligible:
+        return None
+
+    eligible.sort(key=lambda item: item[0], reverse=True)
+    return eligible[0][1]
 
 
 async def enrich_complaint_with_detection(

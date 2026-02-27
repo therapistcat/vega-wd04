@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import math
 from pathlib import Path
 from uuid import uuid4
 
@@ -22,6 +23,28 @@ router = APIRouter(prefix="/a", tags=["authority"])
 UPLOAD_DIR = Path(__file__).resolve().parents[2] / "static" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
+
+
+def _as_utc_datetime(value: datetime | None) -> datetime:
+    if not isinstance(value, datetime):
+        return datetime.now(timezone.utc)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _authority_rank_score(complaint: dict, now: datetime) -> float:
+    created_at = _as_utc_datetime(complaint.get("created_at"))
+    age_hours = max(0.0, (now - created_at).total_seconds() / 3600.0)
+    upvotes = float(complaint.get("upvotes_count") or 0.0)
+    priority = float(complaint.get("priority_score") or 0.0)
+
+    vote_decay = math.pow(0.5, age_hours / 24.0)
+    fresh_bonus = max(0.0, 2.0 - (age_hours / 12.0))
+    status = str(complaint.get("status") or "").strip().lower()
+    status_bonus = 0.8 if status == "open" else (0.4 if status == "in progress" else -0.5)
+
+    return (upvotes * vote_decay * 2.5) + (priority * 2.0) + fresh_bonus + status_bonus
 
 
 def _resolve_extension(image: UploadFile) -> str:
@@ -57,7 +80,15 @@ async def list_all_complaints(
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> list[ComplaintResponse]:
     cursor = db[COMPLAINTS_COLLECTION].find({})
-    complaints = await cursor.sort("created_at", -1).to_list(length=500)
+    complaints = await cursor.to_list(length=500)
+    now = datetime.now(timezone.utc)
+    complaints.sort(
+        key=lambda row: (
+            _authority_rank_score(row, now),
+            _as_utc_datetime(row.get("updated_at") or row.get("created_at")),
+        ),
+        reverse=True,
+    )
     return [ComplaintResponse.model_validate(serialize_complaint(item)) for item in complaints]
 
 

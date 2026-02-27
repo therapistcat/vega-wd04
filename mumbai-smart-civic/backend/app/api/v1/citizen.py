@@ -22,6 +22,7 @@ from app.schemas.complaint_schema import (
     AreaSummary,
     ComplaintReportResponse,
     ComplaintResponse,
+    DailyPriorityResponse,
     DepartmentRoute,
     ProgressOverviewResponse,
     ReporterInfo,
@@ -71,6 +72,7 @@ FEED_UPVOTE_HALF_LIFE_HOURS = 20.0
 FEED_OPEN_STATUS_BOOST = 0.4
 FEED_IN_PROGRESS_STATUS_BOOST = 0.2
 FEED_RESOLVED_STATUS_PENALTY = -0.25
+IST_TIMEZONE = timezone(timedelta(hours=5, minutes=30))
 
 
 def _default_announcements() -> list[dict]:
@@ -196,6 +198,29 @@ def _feed_rank_score(complaint: dict, now: datetime) -> float:
     return newness_boost + decayed_upvotes + priority_score + status_adjustment
 
 
+def _daily_priority_score(complaint: dict, now: datetime) -> float:
+    upvotes = float(complaint.get("upvotes_count") or 0.0)
+    priority = float(complaint.get("priority_score") or 0.0)
+    created_at = _as_utc_datetime(complaint.get("created_at"))
+    age_hours = max(0.0, (now - created_at).total_seconds() / 3600.0)
+
+    freshness_bonus = max(0.0, 2.0 - (age_hours / 12.0))
+    status = str(complaint.get("status") or "").strip().lower()
+    status_bonus = 0.6 if status == "open" else (0.3 if status == "in progress" else -0.4)
+    return (upvotes * 3.0) + (priority * 2.0) + freshness_bonus + status_bonus
+
+
+def _sort_complaints_by_rank(complaints: list[dict], now: datetime) -> list[dict]:
+    complaints.sort(
+        key=lambda item: (
+            _feed_rank_score(item, now),
+            _as_utc_datetime(item.get("updated_at") or item.get("created_at")),
+        ),
+        reverse=True,
+    )
+    return complaints
+
+
 async def _build_report_items(
     *,
     db: AsyncIOMotorDatabase,
@@ -283,14 +308,18 @@ async def get_announcements(
         defaults = _default_announcements()
         return [AnnouncementItem.model_validate(item) for item in defaults]
 
+    valid_severity = {"info", "warning", "critical"}
     items: list[AnnouncementItem] = []
     for doc in docs:
+        severity = str(doc.get("severity") or "info").strip().lower()
+        if severity not in valid_severity:
+            severity = "info"
         items.append(
             AnnouncementItem(
                 id=str(doc.get("_id") or doc.get("id") or ""),
                 title=str(doc.get("title") or "Municipal Announcement"),
                 message=str(doc.get("message") or ""),
-                severity=str(doc.get("severity") or "info"),
+                severity=severity,
                 created_at=doc.get("created_at"),
             )
         )
@@ -404,13 +433,7 @@ async def list_complaint_feed(
     cursor = db[COMPLAINTS_COLLECTION].find({})
     complaints = await cursor.to_list(length=500)
     now = datetime.now(timezone.utc)
-    complaints.sort(
-        key=lambda item: (
-            _feed_rank_score(item, now),
-            _as_utc_datetime(item.get("created_at")),
-        ),
-        reverse=True,
-    )
+    _sort_complaints_by_rank(complaints, now)
     complaints = complaints[:300]
     return [
         ComplaintResponse.model_validate(
@@ -531,7 +554,8 @@ async def get_reports_by_area(
         radius_m=radius_m,
     )
 
-    docs = await db[COMPLAINTS_COLLECTION].find(query).sort("created_at", -1).to_list(length=limit)
+    docs = await db[COMPLAINTS_COLLECTION].find(query).to_list(length=limit)
+    _sort_complaints_by_rank(docs, datetime.now(timezone.utc))
     reports = await _build_report_items(
         db=db,
         docs=docs,
@@ -563,6 +587,60 @@ async def get_reports_by_area(
         area_query=area.strip() if area else None,
         summary=summary,
         reports=reports,
+    )
+
+
+@router.get("/reports/priority-today", response_model=DailyPriorityResponse)
+async def get_priority_report_today(
+    area: str | None = Query(default=None, max_length=120),
+    current_user: dict = Depends(require_roles(["citizen", "authority", "admin"])),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> DailyPriorityResponse:
+    _ = current_user
+    now_utc = datetime.now(timezone.utc)
+    today_start_ist = now_utc.astimezone(IST_TIMEZONE).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start_utc = today_start_ist.astimezone(timezone.utc)
+    date_label = today_start_ist.strftime("%Y-%m-%d")
+
+    query: dict = {
+        "created_at": {"$gte": today_start_utc},
+        "status": {"$ne": "Resolved"},
+    }
+    if area and area.strip():
+        query["ward"] = {"$regex": re.escape(area.strip()), "$options": "i"}
+
+    docs = await db[COMPLAINTS_COLLECTION].find(query).to_list(length=500)
+    if not docs:
+        return DailyPriorityResponse(
+            date=date_label,
+            has_data=False,
+            message="No reports detected today.",
+            score=None,
+            top_report=None,
+        )
+
+    docs.sort(
+        key=lambda row: (
+            _daily_priority_score(row, now_utc),
+            float(row.get("upvotes_count") or 0),
+            _as_utc_datetime(row.get("created_at")),
+        ),
+        reverse=True,
+    )
+    top_doc = docs[0]
+    top_item = await _build_report_items(
+        db=db,
+        docs=[top_doc],
+        viewer_user_id=current_user["id"],
+    )
+    top_score = round(float(_daily_priority_score(top_doc, now_utc)), 2)
+
+    return DailyPriorityResponse(
+        date=date_label,
+        has_data=True,
+        message="Most important issue to fix today based on upvotes and urgency.",
+        score=top_score,
+        top_report=top_item[0] if top_item else None,
     )
 
 
@@ -622,19 +700,32 @@ async def progress_overview(
     current_user: dict = Depends(require_roles(["citizen", "authority", "admin"])),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> ProgressOverviewResponse:
+    def _merge_with_and(base: dict, extra: dict) -> dict:
+        if not base:
+            return extra
+        if "$and" in base and len(base) == 1 and isinstance(base["$and"], list):
+            return {"$and": [*base["$and"], extra]}
+        return {"$and": [base, extra]}
+
     if (lat is None) != (lng is None):
         raise HTTPException(status_code=400, detail="Both lat and lng must be provided together")
 
-    base_query = _build_area_filter(
+    area_query = _build_area_filter(
         area=area,
         status_filter=None,
         lat=lat,
         lng=lng,
         radius_m=radius_m,
     )
-    base_query["created_at"] = {
-        "$gte": datetime.now(timezone.utc) - timedelta(hours=window_hours)
+    time_cutoff = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+    recent_activity_query = {
+        "$or": [
+            {"created_at": {"$gte": time_cutoff}},
+            {"updated_at": {"$gte": time_cutoff}},
+            {"resolved_at": {"$gte": time_cutoff}},
+        ]
     }
+    base_query = _merge_with_and(area_query, recent_activity_query)
 
     total_reports = await db[COMPLAINTS_COLLECTION].count_documents(base_query)
     grouped = await db[COMPLAINTS_COLLECTION].aggregate(
@@ -650,8 +741,7 @@ async def progress_overview(
         if key in counts:
             counts[key] = int(row.get("count", 0))
 
-    my_query = dict(base_query)
-    my_query["user_id"] = ObjectId(current_user["id"])
+    my_query = _merge_with_and(base_query, {"user_id": ObjectId(current_user["id"])})
     my_total = await db[COMPLAINTS_COLLECTION].count_documents(my_query)
     my_grouped = await db[COMPLAINTS_COLLECTION].aggregate(
         [
@@ -673,7 +763,12 @@ async def progress_overview(
     ).to_list(length=1)
     my_upvotes_received = int(my_upvotes_agg[0]["sum_upvotes"]) if my_upvotes_agg else 0
 
-    recent_docs = await db[COMPLAINTS_COLLECTION].find(base_query).sort("created_at", -1).to_list(length=limit_recent)
+    recent_docs = (
+        await db[COMPLAINTS_COLLECTION]
+        .find(base_query)
+        .sort([("updated_at", -1), ("created_at", -1)])
+        .to_list(length=limit_recent)
+    )
     recent_reports = await _build_report_items(
         db=db,
         docs=recent_docs,
@@ -685,7 +780,7 @@ async def progress_overview(
         [
             {
                 "$match": {
-                    **base_query,
+                    **area_query,
                     "created_at": {"$gte": trend_start},
                 }
             },

@@ -89,6 +89,14 @@ class ProgressOverviewResponse(BaseModel):
     recent_reports: list[ComplaintReportResponse] = []
 
 
+class DailyPriorityResponse(BaseModel):
+    date: str
+    has_data: bool = False
+    message: str
+    score: float | None = None
+    top_report: ComplaintReportResponse | None = None
+
+
 class AnnouncementItem(BaseModel):
     id: str
     title: str
