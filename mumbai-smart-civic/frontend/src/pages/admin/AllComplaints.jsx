@@ -45,16 +45,19 @@ export default function AllComplaints() {
                     </p>
                 </div>
 
-                <div style={{ display: 'flex', gap: 8, background: 'rgba(255,255,255,0.8)', padding: 6, borderRadius: 16, border: '1px solid rgba(148, 163, 184, 0.2)', backdropFilter: 'blur(8px)' }}>
+                <div style={{ display: 'flex', gap: 8, background: 'var(--bg-glass-strong)', padding: '6px 8px', borderRadius: 20, border: '1px solid var(--glass-border-subtle)', backdropFilter: 'blur(12px)' }}>
                     {['all', 'open', 'in progress', 'resolved'].map((f) => (
                         <button
                             key={f}
                             onClick={() => setFilter(f)}
+                            className={`btn ${filter === f ? 'btn-primary-filled' : 'btn-ghost'}`}
                             style={{
-                                padding: '8px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600,
-                                textTransform: 'capitalize', color: filter === f ? 'var(--primary)' : 'var(--text-muted)',
-                                background: filter === f ? 'rgba(37, 99, 235, 0.15)' : 'transparent',
-                                transition: 'all 0.2s', border: filter === f ? '1px solid rgba(37, 99, 235, 0.2)' : '1px solid transparent'
+                                padding: '6px 16px', borderRadius: 14, fontSize: 12, fontWeight: 700,
+                                textTransform: 'capitalize',
+                                minWidth: 90,
+                                border: 'none',
+                                background: filter === f ? 'var(--primary-gradient)' : 'transparent',
+                                color: filter === f ? '#fff' : 'var(--text-muted)',
                             }}
                         >
                             {f}

@@ -7,6 +7,7 @@ import {
     MdPending,
     MdPhotoCamera,
     MdReport,
+    MdSearch,
     MdTrendingUp,
 } from 'react-icons/md';
 import { SkeletonBanner, SkeletonStats } from '../../components/Skeleton';
@@ -805,8 +806,8 @@ export default function CitizenDashboard() {
                                     <option value="In Progress">In Progress</option>
                                     <option value="Resolved">Resolved</option>
                                 </select>
-                                <Button type="submit" size="sm" disabled={areaLoading}>
-                                    {areaLoading ? 'Searching...' : 'Search'}
+                                <Button type="submit" size="sm" disabled={areaLoading} className="search-icon-btn">
+                                    {areaLoading ? <div className="spinner-tiny" /> : <MdSearch size={22} />}
                                 </Button>
                             </form>
 

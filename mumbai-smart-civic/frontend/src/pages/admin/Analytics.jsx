@@ -76,7 +76,7 @@ export default function Analytics() {
                 </div>
             )}
 
-            <div className="glass-card" style={{ padding: 0, height: 500, overflow: 'hidden', marginTop: 22 }}>
+            <div className="glass-card table-glass-container" style={{ padding: 0, height: 500, overflow: 'hidden', marginTop: 24, border: '1px solid var(--glass-border-subtle)' }}>
                 {loading ? (
                     <div className="skeleton" style={{ width: '100%', height: '100%' }} />
                 ) : (

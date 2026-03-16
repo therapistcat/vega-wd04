@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { SkeletonTable } from '../../components/Skeleton';
 import CameraCapture from '../../components/CameraCapture';
+import { MdMyLocation } from 'react-icons/md';
 import api from '../../utils/api';
 
 function toErrorMessage(err, fallback = 'Something went wrong') {
@@ -228,7 +229,7 @@ export default function MyComplaints() {
                     </p>
                 </div>
                 <button
-                    className={`btn ${showForm ? 'btn-ghost' : 'btn-primary-filled'}`}
+                    className={`btn ${showForm ? 'btn-danger-outline' : 'btn-primary-filled'}`}
                     id="new-complaint-btn"
                     onClick={() => setShowForm(!showForm)}
                 >
@@ -285,7 +286,8 @@ export default function MyComplaints() {
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-                            <button type="button" className="btn btn-ghost" onClick={requestLiveLocation} disabled={locating}>
+                            <button type="button" className="btn btn-secondary-glass" onClick={requestLiveLocation} disabled={locating}>
+                                <MdMyLocation size={18} />
                                 {locating ? 'Fetching Location...' : 'Use Live Location'}
                             </button>
                             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>

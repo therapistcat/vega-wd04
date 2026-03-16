@@ -1,11 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
-
 export default function AppLayout({ role }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
-
+    
     const toggleSidebar = useCallback(() => setSidebarOpen((o) => !o), []);
     const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
@@ -15,8 +14,11 @@ export default function AppLayout({ role }) {
             {sidebarOpen && <div className="sidebar-overlay" onClick={closeSidebar} />}
             <div className="main-content">
                 <Navbar onMenuClick={toggleSidebar} />
-                <Outlet />
+                <div className="main-content-wrapper">
+                    <Outlet />
+                </div>
             </div>
         </div>
     );
 }
+

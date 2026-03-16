@@ -9,29 +9,49 @@ export default function InputField({
     className = '',
     inputClassName = '',
     children,
+    icon: Icon,
+    liquid = false,
+    size = 'md',
     ...props
 }) {
-    const fieldClass = ['ui-field', className].filter(Boolean).join(' ');
+    const fieldClass = [liquid ? 'liquid-field' : 'ui-field', className].filter(Boolean).join(' ');
     const inputClass = ['ui-input', error ? 'ui-input--error' : '', inputClassName]
         .filter(Boolean)
         .join(' ');
-    const messageId = `${id}-message`;
+    
+    const containerClass = [
+        liquid ? 'glass-input-liquid' : '',
+        liquid && size === 'sm' ? 'glass-input-mini' : ''
+    ].filter(Boolean).join(' ');
     const ComponentTag = as === 'textarea' ? 'textarea' : as === 'select' ? 'select' : 'input';
+
+    const renderInput = () => (
+        <ComponentTag
+            id={id}
+            className={liquid ? '' : inputClass}
+            aria-invalid={Boolean(error)}
+            aria-describedby={(hint || error) ? `${id}-message` : undefined}
+            {...props}
+        >
+            {as === 'select' ? children : null}
+        </ComponentTag>
+    );
 
     return (
         <div className={fieldClass}>
-            {label && <label htmlFor={id}>{label}</label>}
-            <ComponentTag
-                id={id}
-                className={inputClass}
-                aria-invalid={Boolean(error)}
-                aria-describedby={hint || error ? messageId : undefined}
-                {...props}
-            >
-                {as === 'select' ? children : null}
-            </ComponentTag>
+            {label && <label htmlFor={id} style={liquid ? { color: 'rgba(255,255,255,0.95)', fontWeight: '600', fontSize: '14px', marginBottom: '8px', display: 'block', marginLeft: '4px' } : {}}>{label}</label>}
+            
+            {liquid ? (
+                <div className={containerClass}>
+                    {Icon && <div className="glass-input-icon"><Icon /></div>}
+                    {renderInput()}
+                </div>
+            ) : (
+                renderInput()
+            )}
+
             {(hint || error) && (
-                <p id={messageId} className={error ? 'ui-field__hint ui-field__hint--error' : 'ui-field__hint'}>
+                <p id={`${id}-message`} className={error ? 'ui-field__hint ui-field__hint--error' : 'ui-field__hint'}>
                     {error || hint}
                 </p>
             )}

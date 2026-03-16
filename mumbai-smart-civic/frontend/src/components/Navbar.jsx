@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { MdMenu } from 'react-icons/md';
+import ThemeToggle from './ui/ThemeToggle';
 
 const pageTitles = {
     '/citizen/dashboard': 'Dashboard',
@@ -37,6 +38,7 @@ export default function Navbar({ onMenuClick }) {
             </div>
 
             <div className="navbar-right">
+                <ThemeToggle />
                 <div className="user-info-desktop navbar-user-copy">
                     <span className="navbar-user-name">{user?.name || 'User'}</span>
                     <span className="navbar-user-role">{roleLabel}</span>

@@ -1,8 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
-import Login from './pages/Login';
-import Register from './pages/Register';
+import AuthContainer from './pages/AuthContainer';
 
 // Citizen pages
 import CitizenDashboard from './pages/citizen/Dashboard';
@@ -52,9 +51,9 @@ export default function App() {
     return (
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
-                {/* Public */}
-                <Route path="/" element={<Login />} />
-                <Route path="/register" element={<Register />} />
+                {/* Public - 3D Flipping Auth Container handles both */}
+                <Route path="/" element={<AuthContainer />} />
+                <Route path="/register" element={<AuthContainer />} />
 
                 {/* Citizen routes */}
                 <Route

@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { MdPhotoCamera } from 'react-icons/md';
 
 export default function CameraCapture({ onCapture }) {
     const videoRef = useRef(null);
@@ -58,7 +59,8 @@ export default function CameraCapture({ onCapture }) {
 
     return (
         <div>
-            <button type="button" className="btn btn-ghost" onClick={openCamera}>
+            <button type="button" className="btn btn-secondary-glass" onClick={openCamera}>
+                <MdPhotoCamera size={18} />
                 Use Camera
             </button>
             {error && <div style={{ marginTop: 6, fontSize: 12, color: '#b91c1c' }}>{error}</div>}
