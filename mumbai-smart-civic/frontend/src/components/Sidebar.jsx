@@ -11,6 +11,7 @@ import {
     MdList,
     MdCheckCircle,
     MdLink,
+    MdOutlineEmergencyShare,
 } from 'react-icons/md';
 
 const citizenLinks = [
@@ -20,6 +21,7 @@ const citizenLinks = [
     { to: '/citizen/heatmap', label: 'Heatmap', icon: <MdMap /> },
     { to: '/citizen/blockchain-ledger', label: 'Chain Ledger', icon: <MdLink /> },
     { to: '/citizen/notifications', label: 'Notifications', icon: <MdNotifications /> },
+    { to: '/citizen/emergency-assistant', label: 'Emergency Help', icon: <MdOutlineEmergencyShare /> },
 ];
 
 const authorityLinks = [

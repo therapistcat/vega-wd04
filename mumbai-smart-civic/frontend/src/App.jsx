@@ -10,6 +10,7 @@ import MyComplaints from './pages/citizen/MyComplaints';
 import Heatmap from './pages/citizen/Heatmap';
 import Notifications from './pages/citizen/Notifications';
 import BlockchainLedger from './pages/citizen/BlockchainLedger';
+import EmergencyAssistant from './pages/citizen/EmergencyAssistant';
 
 // Admin pages
 import AdminDashboard from './pages/admin/Dashboard';
@@ -70,6 +71,7 @@ export default function App() {
                     <Route path="heatmap" element={<Heatmap />} />
                     <Route path="notifications" element={<Notifications />} />
                     <Route path="blockchain-ledger" element={<BlockchainLedger />} />
+                    <Route path="emergency-assistant" element={<EmergencyAssistant />} />
                 </Route>
 
                 {/* Admin routes */}
