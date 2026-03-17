@@ -37,4 +37,8 @@ def serialize_user(user: Dict[str, Any]) -> Dict[str, Any]:
         "authority_level": user.get("authority_level"),
         "created_at": user.get("created_at"),
         "updated_at": user.get("updated_at"),
+        "is_blocked": user.get("is_blocked", False),
+        "blocked_reason": user.get("blocked_reason"),
+        "blocked_at": user.get("blocked_at"),
+        "blocked_by": user.get("blocked_by"),
     }

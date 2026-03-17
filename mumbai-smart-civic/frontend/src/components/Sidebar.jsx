@@ -14,6 +14,7 @@ import {
     MdOutlineEmergencyShare,
     MdVolunteerActivism,
     MdAssignment,
+    MdBlock,
 } from 'react-icons/md';
 
 const citizenLinks = [
@@ -38,6 +39,8 @@ const authorityLinks = [
     { to: '/admin/ngo-requests', label: 'NGO Requests', icon: <MdVolunteerActivism /> },
     { to: '/admin/resolve', label: 'Resolve', icon: <MdCheckCircle /> },
     { to: '/admin/analytics', label: 'Analytics', icon: <MdAnalytics /> },
+    { to: '/admin/traffic-prediction', label: 'Traffic AI', icon: <MdInsights /> },
+    { to: '/admin/blocked', label: 'Blocked Users', icon: <MdBlock /> },
 ];
 
 export default function Sidebar({ role, open, onClose }) {

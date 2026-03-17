@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import api from '../utils/api';
 
 const NGOContext = createContext();
@@ -30,6 +30,20 @@ export const NGOProvider = ({ children }) => {
             setLoading(false);
         }
     };
+
+    const localIssues = useMemo(() => {
+        const mapping = {};
+        ngoRequests.forEach(req => {
+            if (req.status === 'approved') {
+                const id = req.issue_id || req.issueId;
+                mapping[id] = {
+                    isAssisted: true,
+                    assistantName: req.ngo_name || req.ngoName
+                };
+            }
+        });
+        return mapping;
+    }, [ngoRequests]);
 
     useEffect(() => {
         fetchRequests();
@@ -63,7 +77,8 @@ export const NGOProvider = ({ children }) => {
             fetchRequests,
             addRequest, 
             updateRequestStatus, 
-            getRequestsForIssue 
+            getRequestsForIssue,
+            localIssues
         }}>
             {children}
         </NGOContext.Provider>

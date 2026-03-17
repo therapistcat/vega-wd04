@@ -4,7 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.config import settings
@@ -209,10 +209,20 @@ async def update_complaint_status_with_proof(
 
 @router.get("/spatial-analytics", response_model=list[SpatialAnalyticsPoint])
 async def spatial_analytics(
+    lat: float | None = Query(default=None, ge=-90, le=90),
+    lng: float | None = Query(default=None, ge=-180, le=180),
+    radius_m: int = Query(default=3000, ge=100, le=50000),
+    window_hours: int = Query(default=720, ge=1, le=7000),
     current_user: dict = Depends(
         require_authority(settings.authority_min_level_spatial_analytics)
     ),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> list[SpatialAnalyticsPoint]:
-    points = await compute_spatial_analytics(db, window_hours=24 * 30)
+    points = await compute_spatial_analytics(
+        db, 
+        lat=lat, 
+        lng=lng, 
+        radius_m=radius_m, 
+        window_hours=window_hours
+    )
     return [SpatialAnalyticsPoint.model_validate(point) for point in points]

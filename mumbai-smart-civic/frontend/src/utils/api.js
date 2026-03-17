@@ -34,6 +34,16 @@ api.interceptors.response.use(
                 }
             }
         }
+        if (err.response && err.response.status === 403) {
+            const detail = err.response.data?.detail || "";
+            if (detail.includes("You are blocked")) {
+                alert(detail);
+                // Optionally log out if we want to force them out
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = '/';
+            }
+        }
         return Promise.reject(err);
     }
 );

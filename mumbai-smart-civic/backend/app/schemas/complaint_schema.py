@@ -40,6 +40,10 @@ class ComplaintResponse(BaseModel):
     upvotes_count: int = Field(default=0, ge=0)
     has_upvoted: bool = False
     location: dict
+    source: str = "web"
+    call_metadata: dict | None = None
+    cluster_id: str | None = None
+    is_duplicate: bool = False
     ngo_request_count: int = 0
     ngo_assisting: bool = False
     assistant_name: str | None = None

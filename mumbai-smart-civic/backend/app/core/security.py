@@ -102,6 +102,14 @@ async def get_current_user(
     user = await db[USERS_COLLECTION].find_one({"_id": user_id})
     if not user:
         raise AuthError("User no longer exists")
+    
+    if user.get("is_blocked"):
+        reason = user.get("blocked_reason") or "No reason provided"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"You are blocked. Reason: {reason}"
+        )
+
     return serialize_user(user)
 
 

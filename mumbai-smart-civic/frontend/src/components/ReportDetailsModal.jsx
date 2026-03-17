@@ -78,6 +78,22 @@ export default function ReportDetailsModal({ report, open, onClose }) {
                     <div><strong>Updated:</strong> {report.updated_at ? new Date(report.updated_at).toLocaleString() : '-'}</div>
                     <div><strong>Resolved At:</strong> {report.resolved_at ? new Date(report.resolved_at).toLocaleString() : '-'}</div>
                     <div><strong>Resolved By:</strong> {report.resolved_by?.name || '-'}</div>
+                    {report.source === 'call' && (
+                        <div style={{ gridColumn: '1 / -1', marginTop: 10, background: 'rgba(59, 130, 246, 0.1)', padding: 12, borderRadius: 8 }}>
+                            <div style={{ color: 'var(--primary)', fontWeight: 'bold', marginBottom: 6 }}>📞 Voice Call Metadata</div>
+                            <div style={{ fontSize: 13, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                <div><strong>Caller:</strong> {report.call_metadata?.phone_number || 'Unknown'}</div>
+                                <div><strong>Call ID:</strong> {report.call_metadata?.call_id || 'N/A'}</div>
+                                {report.call_metadata?.duration && <div><strong>Duration:</strong> {report.call_metadata?.duration}s</div>}
+                            </div>
+                            <div style={{ marginTop: 10 }}>
+                                <strong>Transcript:</strong>
+                                <p style={{ fontSize: 13, background: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 4, marginTop: 4, whiteSpace: 'pre-wrap' }}>
+                                    {report.call_metadata?.transcript || 'No transcript available'}
+                                </p>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {report.resolution_note && (

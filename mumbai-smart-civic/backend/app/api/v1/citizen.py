@@ -33,6 +33,7 @@ from app.services.geo_service import run_st_dbscan_clustering, update_intensity_
 from app.services.ml_service import compute_priority_score, predict_department
 from app.services.complaint_service import enrich_complaint_with_detection
 from app.services.spatial_service import compute_spatial_analytics
+from app.services.clustering_service import process_issue as cluster_process_issue
 
 
 router = APIRouter(prefix="/c", tags=["citizen"])
@@ -396,6 +397,33 @@ async def create_complaint(
     if not inserted:
         raise HTTPException(status_code=500, detail="Failed to fetch inserted complaint")
 
+    complaint_str_id = str(insert_result.inserted_id)
+
+    # Run clustering synchronously to provide immediate duplicate feedback in the response
+    try:
+        cluster_result = await cluster_process_issue(
+            db,
+            category=final_category,
+            location=ward,
+            description=description,
+            complaint_id=complaint_str_id,
+            user_id=current_user["id"],
+            source="web",
+        )
+        # Update the document in DB
+        await db[COMPLAINTS_COLLECTION].update_one(
+            {"_id": ObjectId(complaint_str_id)},
+            {"$set": {
+                "cluster_id": cluster_result["cluster_id"],
+                "is_duplicate": cluster_result["is_duplicate"],
+            }},
+        )
+        # Update the object we'll return
+        inserted["cluster_id"] = cluster_result["cluster_id"]
+        inserted["is_duplicate"] = cluster_result["is_duplicate"]
+    except Exception as exc:
+        print(f"[clustering] error: {exc}")
+
     background_tasks.add_task(run_st_dbscan_clustering, db)
     background_tasks.add_task(update_intensity_scores, db)
 
@@ -497,7 +525,7 @@ async def toggle_complaint_upvote(
 async def spatial_analytics_for_citizen(
     lat: float | None = Query(default=None, ge=-90, le=90),
     lng: float | None = Query(default=None, ge=-180, le=180),
-    radius_m: int = Query(default=3000, ge=100, le=50000),
+    radius_m: int = Query(default=5000, ge=100, le=50000),
     window_hours: int = Query(default=72, ge=1, le=720),
     current_user: dict = Depends(require_roles(["citizen", "authority", "admin"])),
     db: AsyncIOMotorDatabase = Depends(get_database),
@@ -517,7 +545,7 @@ async def spatial_analytics_for_citizen(
 async def heatmap_alias(
     lat: float | None = Query(default=None, ge=-90, le=90),
     lng: float | None = Query(default=None, ge=-180, le=180),
-    radius_m: int = Query(default=3000, ge=100, le=50000),
+    radius_m: int = Query(default=5000, ge=100, le=50000),
     window_hours: int = Query(default=72, ge=1, le=720),
     current_user: dict = Depends(require_roles(["citizen", "authority", "admin"])),
     db: AsyncIOMotorDatabase = Depends(get_database),

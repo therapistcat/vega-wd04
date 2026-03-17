@@ -62,6 +62,9 @@ export default function Heatmap() {
         try {
             const res = await api.get('/c/spatial-analytics', {
                 params: {
+                    lat: lat || undefined,
+                    lng: lng || undefined,
+                    radius_m: lat && lng ? 5000 : undefined,
                     window_hours: 720,
                 },
             });
@@ -193,6 +196,31 @@ export default function Heatmap() {
                 </p>
             </div>
 
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+                <button 
+                    type="button"
+                    className="btn btn-primary-filled" 
+                    onClick={async () => {
+                        const [lat, lng] = await requestUserLocation();
+                        const newCenter = [lat, lng];
+                        setCenter(newCenter);
+                        centerRef.current = newCenter;
+                        await fetchHeatmap(lat, lng, true);
+                    }}
+                    style={{ padding: '8px 16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                    <span style={{ fontSize: '18px' }}>📍</span> Locate Me
+                </button>
+                <button 
+                    type="button"
+                    className="btn btn-ghost" 
+                    onClick={() => fetchHeatmap(center[0], center[1], true)}
+                    style={{ padding: '8px 16px', fontSize: '13px' }}
+                >
+                    Refresh Heatmap
+                </button>
+            </div>
+
             {error && (
                 <div style={{ marginBottom: 12, color: '#b91c1c', fontSize: 13, fontWeight: 600 }}>
                     {error}
@@ -207,15 +235,23 @@ export default function Heatmap() {
                         <MapComponent center={center} zoom={16} style={{ height: 'min(62vh, 560px)', minHeight: '320px' }}>
                             <CircleMarker
                                 center={center}
-                                radius={9}
+                                radius={locationSource === 'live' ? 12 : 9}
                                 pathOptions={{
-                                    color: '#065f46',
-                                    fillColor: '#10b981',
-                                    fillOpacity: 0.9,
-                                    weight: 2,
+                                    color: locationSource === 'live' ? '#3b82f6' : '#065f46',
+                                    fillColor: locationSource === 'live' ? '#60a5fa' : '#10b981',
+                                    fillOpacity: 0.8,
+                                    weight: 3,
+                                    className: locationSource === 'live' ? 'user-location-pulse' : ''
                                 }}
                             >
-                                <Popup>You are here</Popup>
+                                <Popup>
+                                    <div style={{ textAlign: 'center' }}>
+                                        <strong>You are here</strong><br/>
+                                        <span style={{ fontSize: '11px', color: '#666' }}>
+                                            {locationSource === 'live' ? 'Live Geolocation' : 'Default Mumbai Center'}
+                                        </span>
+                                    </div>
+                                </Popup>
                             </CircleMarker>
 
                             {points.length > 0 && (

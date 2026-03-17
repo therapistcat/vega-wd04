@@ -11,6 +11,7 @@ import Heatmap from './pages/citizen/Heatmap';
 import Notifications from './pages/citizen/Notifications';
 import BlockchainLedger from './pages/citizen/BlockchainLedger';
 import EmergencyAssistant from './pages/citizen/EmergencyAssistant';
+import ClusterPage from './pages/citizen/ClusterPage';
 
 // Admin pages
 import AdminDashboard from './pages/admin/Dashboard';
@@ -18,6 +19,8 @@ import AllComplaints from './pages/admin/AllComplaints';
 import ResolveComplaint from './pages/admin/ResolveComplaint';
 import Analytics from './pages/admin/Analytics';
 import NGORequests from './pages/admin/NGORequests';
+import TrafficPrediction from './pages/admin/TrafficPrediction';
+import BlockedUsers from './pages/admin/BlockedUsers';
 
 // NGO pages
 import NGODashboard from './pages/ngo/Dashboard';
@@ -85,6 +88,7 @@ export default function App() {
                         <Route path="notifications" element={<Notifications />} />
                         <Route path="blockchain-ledger" element={<BlockchainLedger />} />
                         <Route path="emergency-assistant" element={<EmergencyAssistant />} />
+                        <Route path="cluster/:clusterId" element={<ClusterPage />} />
                     </Route>
 
                     {/* NGO routes */}
@@ -115,7 +119,10 @@ export default function App() {
                         <Route path="resolve" element={<ResolveComplaint />} />
                         <Route path="analytics" element={<Analytics />} />
                         <Route path="ngo-requests" element={<NGORequests />} />
+                        <Route path="traffic-prediction" element={<TrafficPrediction />} />
+                        <Route path="blocked" element={<BlockedUsers />} />
                     </Route>
+
 
                     {/* Fallback */}
                     <Route path="*" element={<Navigate to="/" replace />} />

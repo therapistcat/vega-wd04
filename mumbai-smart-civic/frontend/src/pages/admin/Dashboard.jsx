@@ -6,6 +6,7 @@ import {
     MdReport,
     MdTrendingUp,
     MdWarningAmber,
+    MdCall,
 } from 'react-icons/md';
 import { SkeletonBanner, SkeletonStats, SkeletonTable } from '../../components/Skeleton';
 import Button from '../../components/ui/Button';
@@ -48,6 +49,7 @@ export default function AdminDashboard() {
     const [error, setError] = useState('');
     const [updatingIds, setUpdatingIds] = useState([]);
     const [toast, setToast] = useState(null);
+    const [sourceFilter, setSourceFilter] = useState('all');
 
     const fetchComplaints = async (silent = false) => {
         if (!silent) setLoading(true);
@@ -82,6 +84,7 @@ export default function AdminDashboard() {
 
     const rankedComplaints = useMemo(() => {
         return [...complaints]
+            .filter((c) => sourceFilter === 'all' || c.source === sourceFilter)
             .map((c) => ({ ...c, dashboard_score: computePriorityScore(c) }))
             .sort((a, b) => {
                 if (b.dashboard_score !== a.dashboard_score) return b.dashboard_score - a.dashboard_score;
@@ -198,7 +201,19 @@ export default function AdminDashboard() {
             <div className="table-glass-container" style={{ marginBottom: 16 }}>
                 <div className="table-head">
                     <h3 className="table-title">Priority Action Queue</h3>
-                    <Button size="sm" variant="secondary" onClick={() => fetchComplaints(true)}>Refresh</Button>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                        <select 
+                            value={sourceFilter} 
+                            onChange={(e) => setSourceFilter(e.target.value)}
+                            className="badge-pill"
+                            style={{ background: 'var(--bg-glass)', border: '1px solid var(--border-glass)', cursor: 'pointer' }}
+                        >
+                            <option value="all">All Sources</option>
+                            <option value="web">Web Only</option>
+                            <option value="call">Phone Calls</option>
+                        </select>
+                        <Button size="sm" variant="secondary" onClick={() => fetchComplaints(true)}>Refresh</Button>
+                    </div>
                 </div>
 
                 {actionable.length === 0 ? (
@@ -222,7 +237,10 @@ export default function AdminDashboard() {
                             <tbody>
                                 {actionable.map((c) => (
                                     <tr key={c.id}>
-                                        <td className="cell-title">{c.description?.slice(0, 80) || 'Complaint'}</td>
+                                        <td className="cell-title">
+                                            {c.source === 'call' && <MdCall style={{ color: 'var(--primary)', marginRight: 6 }} />}
+                                            {c.description?.slice(0, 80) || 'Complaint'}
+                                        </td>
                                         <td>{c.upvotes_count || 0}</td>
                                         <td>{c.priority_score || 0}</td>
                                         <td>{c.dashboard_score}</td>
