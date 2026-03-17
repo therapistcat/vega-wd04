@@ -11,6 +11,7 @@ import {
     MdList,
     MdCheckCircle,
     MdLink,
+    MdBlock,
 } from 'react-icons/md';
 
 const citizenLinks = [
@@ -27,6 +28,8 @@ const authorityLinks = [
     { to: '/admin/all-complaints', label: 'All Complaints', icon: <MdList /> },
     { to: '/admin/resolve', label: 'Resolve', icon: <MdCheckCircle /> },
     { to: '/admin/analytics', label: 'Analytics', icon: <MdAnalytics /> },
+    { to: '/admin/traffic-prediction', label: 'Traffic AI', icon: <MdInsights /> },
+    { to: '/admin/blocked', label: 'Blocked Users', icon: <MdBlock /> },
 ];
 
 export default function Sidebar({ role, open, onClose }) {

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.v1 import admin, auth, blockchain, citizen, detection, vapi
+from app.api.v1 import admin, auth, blockchain, citizen, clusters, detection, moderation, traffic, vapi
 from app.ai.ai_agent import router as ai_agent_router
 from app.core.config import settings
 from app.core.database import close_mongo_connection, connect_to_mongo, init_indexes
@@ -57,9 +57,12 @@ async def health() -> dict[str, object]:
 
 
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
+app.include_router(moderation.router, prefix=settings.api_v1_prefix)
 app.include_router(citizen.router, prefix=settings.api_v1_prefix)
 app.include_router(admin.router, prefix=settings.api_v1_prefix)
 app.include_router(blockchain.router, prefix=settings.api_v1_prefix)
 app.include_router(detection.router, prefix=settings.api_v1_prefix)
+app.include_router(traffic.router, prefix=settings.api_v1_prefix)
 app.include_router(ai_agent_router, prefix=settings.api_v1_prefix)
 app.include_router(vapi.router, prefix=settings.api_v1_prefix)
+app.include_router(clusters.router, prefix=settings.api_v1_prefix)

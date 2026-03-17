@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
     MdArrowUpward,
     MdCall,
@@ -384,11 +385,28 @@ export default function CitizenDashboard() {
             }
             formData.append('image', imageFile);
 
-            await api.post('/c/complaints', formData, {
+            const res = await api.post('/c/complaints', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
 
-            setToast({ type: 'success', message: 'Complaint submitted successfully' });
+            const { is_duplicate, cluster_id } = res.data;
+
+            if (is_duplicate && cluster_id) {
+                setToast({ 
+                    type: 'success', 
+                    message: (
+                        <span>
+                            Issue reported! AI detected this as a duplicate. 
+                            <Link to={`/citizen/cluster/${cluster_id}`} style={{ marginLeft: 8, color: '#fff', textDecoration: 'underline' }}>
+                                View Cluster
+                            </Link>
+                        </span>
+                    )
+                });
+            } else {
+                setToast({ type: 'success', message: 'Complaint submitted successfully' });
+            }
+
             setShowComposer(false);
             resetComposer();
             await fetchDashboardData();

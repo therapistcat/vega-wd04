@@ -9,20 +9,23 @@ COMPLAINTS_COLLECTION = "complaints"
 
 def build_complaint_document(
     *,
-    user_id: str,
+    user_id: str | None,
     description: str,
     category: str,
     ward: str,
-    lng: float,
-    lat: float,
-    priority_score: float,
-    predicted_department: str,
-    duplicate_group: str | None,
-    image_url: str,
+    lng: float = 72.8777, # Default Mumbai
+    lat: float = 19.0760,
+    priority_score: float = 0.0,
+    predicted_department: str = "General",
+    duplicate_group: str | None = None,
+    image_url: str | None = None,
+    source: str = "web",
+    call_metadata: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
+    user_oid = ObjectId(user_id) if user_id else None
     return {
-        "user_id": ObjectId(user_id),
+        "user_id": user_oid,
         "description": description,
         "category": category,
         "status": "Open",
@@ -42,6 +45,10 @@ def build_complaint_document(
             "type": "Point",
             "coordinates": [lng, lat],
         },
+        "source": source,
+        "call_metadata": call_metadata,
+        "cluster_id": None,
+        "is_duplicate": False,
         "created_at": now,
         "updated_at": now,
     }
@@ -91,6 +98,10 @@ def serialize_complaint(complaint: Dict[str, Any], viewer_user_id: str | None = 
             "type": "Point",
             "coordinates": [float(coordinates[0]), float(coordinates[1])],
         },
+        "source": complaint.get("source", "web"),
+        "call_metadata": complaint.get("call_metadata"),
+        "cluster_id": complaint.get("cluster_id"),
+        "is_duplicate": bool(complaint.get("is_duplicate", False)),
         "created_at": complaint.get("created_at"),
         "updated_at": complaint.get("updated_at"),
     }

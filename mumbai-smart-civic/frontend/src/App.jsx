@@ -11,12 +11,15 @@ import MyComplaints from './pages/citizen/MyComplaints';
 import Heatmap from './pages/citizen/Heatmap';
 import Notifications from './pages/citizen/Notifications';
 import BlockchainLedger from './pages/citizen/BlockchainLedger';
+import ClusterPage from './pages/citizen/ClusterPage';
 
 // Admin pages
 import AdminDashboard from './pages/admin/Dashboard';
 import AllComplaints from './pages/admin/AllComplaints';
 import ResolveComplaint from './pages/admin/ResolveComplaint';
 import Analytics from './pages/admin/Analytics';
+import TrafficPrediction from './pages/admin/TrafficPrediction';
+import BlockedUsers from './pages/admin/BlockedUsers';
 
 // Layout
 import AppLayout from './components/AppLayout';
@@ -71,6 +74,7 @@ export default function App() {
                     <Route path="heatmap" element={<Heatmap />} />
                     <Route path="notifications" element={<Notifications />} />
                     <Route path="blockchain-ledger" element={<BlockchainLedger />} />
+                    <Route path="cluster/:clusterId" element={<ClusterPage />} />
                 </Route>
 
                 {/* Admin routes */}
@@ -86,6 +90,8 @@ export default function App() {
                     <Route path="all-complaints" element={<AllComplaints />} />
                     <Route path="resolve" element={<ResolveComplaint />} />
                     <Route path="analytics" element={<Analytics />} />
+                    <Route path="traffic-prediction" element={<TrafficPrediction />} />
+                    <Route path="blocked" element={<BlockedUsers />} />
                 </Route>
 
                 {/* Fallback */}

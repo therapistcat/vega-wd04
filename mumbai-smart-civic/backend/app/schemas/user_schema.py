@@ -52,6 +52,10 @@ class UserResponse(BaseModel):
     authority_level: int | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    is_blocked: bool = False
+    blocked_reason: str | None = None
+    blocked_at: datetime | None = None
+    blocked_by: str | None = None
 
 
 class TokenResponse(BaseModel):

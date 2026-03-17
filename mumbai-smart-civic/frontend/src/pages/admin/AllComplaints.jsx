@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { SkeletonTable } from '../../components/Skeleton';
+import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 
 export default function AllComplaints() {
@@ -79,8 +80,10 @@ export default function AllComplaints() {
                                     <th>Category</th>
                                     <th>Location</th>
                                     <th>Status</th>
+                                    <th>Cluster</th>
                                     <th>Resolution</th>
                                     <th>Submitted</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -103,6 +106,26 @@ export default function AllComplaints() {
                                                 {c.status || 'Open'}
                                             </span>
                                         </td>
+                                        <td>
+                                            {c.cluster_id ? (
+                                                <Link 
+                                                    to={`/citizen/cluster/${c.cluster_id}`} 
+                                                    style={{ 
+                                                        fontSize: 11, 
+                                                        color: 'var(--primary)', 
+                                                        background: 'rgba(59, 130, 246, 0.1)', 
+                                                        padding: '4px 8px', 
+                                                        borderRadius: 6,
+                                                        textDecoration: 'none',
+                                                        fontWeight: 600
+                                                    }}
+                                                >
+                                                    {c.cluster_id}
+                                                </Link>
+                                            ) : (
+                                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>None</span>
+                                            )}
+                                        </td>
                                         <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                                             {c.fixed_image_url ? (
                                                 <a href={c.fixed_image_url} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>
@@ -119,6 +142,30 @@ export default function AllComplaints() {
                                         </td>
                                         <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                                             {c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'}
+                                        </td>
+                                        <td>
+                                            <button 
+                                                onClick={() => {
+                                                    const reason = window.prompt(`Block user ${c.user_id}? Enter reason:`);
+                                                    if (reason) {
+                                                        api.post(`/moderation/block/${c.user_id}`, { reason })
+                                                            .then(() => alert("User blocked successfully"))
+                                                            .catch((err) => alert("Failed to block: " + (err.response?.data?.detail || err.message)));
+                                                    }
+                                                }}
+                                                className="btn-glass"
+                                                style={{ 
+                                                    padding: '4px 8px', 
+                                                    fontSize: 11, 
+                                                    color: '#ef4444', 
+                                                    borderColor: 'rgba(239, 68, 68, 0.2)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 4
+                                                }}
+                                            >
+                                                Block
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
