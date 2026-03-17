@@ -117,6 +117,20 @@ def require_roles(allowed_roles: Iterable[str]):
     return role_dependency
 
 
+def require_ngo():
+    async def ngo_dependency(
+        current_user: Dict[str, Any] = Depends(get_current_user),
+    ) -> Dict[str, Any]:
+        if current_user.get("role") != "ngo":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="NGO access required",
+            )
+        return current_user
+
+    return ngo_dependency
+
+
 def _effective_authority_level(current_user: Dict[str, Any]) -> int:
     if current_user.get("role") == "admin":
         return AUTHORITY_RANK_LEVELS["commissioner"]

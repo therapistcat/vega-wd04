@@ -107,6 +107,10 @@ async def login_user(
         if not authority_rank or not validate_authority_code(authority_rank, payload.authority_code):
             raise HTTPException(status_code=403, detail="Invalid authority code")
 
+    if payload.login_as == LoginAs.ngo:
+        if role != "ngo":
+            raise HTTPException(status_code=403, detail="This account is not an NGO account")
+
     token = create_access_token(
         subject=str(user["_id"]),
         role=role,
@@ -118,6 +122,34 @@ async def login_user(
         role=role,
         authority_rank=authority_rank,
         authority_level=authority_level,
+    )
+
+
+@router.post("/mock-ngo-login", response_model=TokenResponse)
+async def mock_ngo_login(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> TokenResponse:
+    # Ensure a default NGO user exists or just use a placeholder OID
+    # For hackathon/demo, we'll try to find an NGO or use a hardcoded OID if we don't want to seed
+    user = await db[USERS_COLLECTION].find_one({"role": "ngo"})
+    if not user:
+        # Create a default NGO user if none exists
+        document = build_user_document(
+            name="NGO Sahayata",
+            email="contact@ngosahayata.org",
+            password_hash=hash_password("password123"), # Not used here but for consistency
+            role="ngo",
+        )
+        result = await db[USERS_COLLECTION].insert_one(document)
+        user = await db[USERS_COLLECTION].find_one({"_id": result.inserted_id})
+
+    token = create_access_token(
+        subject=str(user["_id"]),
+        role="ngo",
+    )
+    return TokenResponse(
+        access_token=token,
+        role="ngo",
     )
 
 

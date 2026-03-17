@@ -12,6 +12,8 @@ import {
     MdCheckCircle,
     MdLink,
     MdOutlineEmergencyShare,
+    MdVolunteerActivism,
+    MdAssignment,
 } from 'react-icons/md';
 
 const citizenLinks = [
@@ -24,9 +26,16 @@ const citizenLinks = [
     { to: '/citizen/emergency-assistant', label: 'Emergency Help', icon: <MdOutlineEmergencyShare /> },
 ];
 
+const ngoLinks = [
+    { to: '/ngo/dashboard', label: 'Dashboard', icon: <MdDashboard /> },
+    { to: '/ngo/available-issues', label: 'Available Issues', icon: <MdList /> },
+    { to: '/ngo/my-requests', label: 'My Requests', icon: <MdAssignment /> },
+];
+
 const authorityLinks = [
     { to: '/admin/dashboard', label: 'Dashboard', icon: <MdDashboard /> },
     { to: '/admin/all-complaints', label: 'All Complaints', icon: <MdList /> },
+    { to: '/admin/ngo-requests', label: 'NGO Requests', icon: <MdVolunteerActivism /> },
     { to: '/admin/resolve', label: 'Resolve', icon: <MdCheckCircle /> },
     { to: '/admin/analytics', label: 'Analytics', icon: <MdAnalytics /> },
 ];
@@ -34,7 +43,15 @@ const authorityLinks = [
 export default function Sidebar({ role, open, onClose }) {
     const navigate = useNavigate();
     const isAuthority = role === 'authority' || role === 'admin';
-    const links = isAuthority ? authorityLinks : citizenLinks;
+    const isNGO = role === 'ngo';
+    
+    let links = citizenLinks;
+    if (isAuthority) links = authorityLinks;
+    else if (isNGO) links = ngoLinks;
+
+    let roleLabel = 'Citizen Portal';
+    if (isAuthority) roleLabel = 'Authority Portal';
+    else if (isNGO) roleLabel = 'NGO Portal';
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -53,7 +70,7 @@ export default function Sidebar({ role, open, onClose }) {
                     <div className="sidebar-brand-mark">SC</div>
                     <div className="brand-text">
                         <h2>Smart Civic</h2>
-                        <span>{isAuthority ? 'Authority Portal' : 'Citizen Portal'}</span>
+                        <span>{roleLabel}</span>
                     </div>
                 </div>
             </div>

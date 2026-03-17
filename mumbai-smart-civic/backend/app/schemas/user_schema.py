@@ -8,11 +8,13 @@ class UserRole(str, Enum):
     citizen = "citizen"
     authority = "authority"
     admin = "admin"  # legacy support
+    ngo = "ngo"
 
 
 class LoginAs(str, Enum):
     citizen = "citizen"
     authority = "authority"
+    ngo = "ngo"
 
 
 class AuthorityRank(str, Enum):

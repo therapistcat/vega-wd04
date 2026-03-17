@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { SkeletonTable } from '../../components/Skeleton';
 import api from '../../utils/api';
+import { useNGO } from '../../context/NGOContext';
+import { Link } from 'react-router-dom';
+import { MdPeople } from 'react-icons/md';
 
 export default function AllComplaints() {
     const [complaints, setComplaints] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
+    const { getRequestsForIssue, localIssues } = useNGO();
 
     useEffect(() => {
         (async () => {
@@ -89,8 +93,33 @@ export default function AllComplaints() {
                             <tbody>
                                 {filtered.map((c, i) => (
                                     <tr key={c.id || i}>
-                                        <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>#{c.id || 1000 + i}</td>
-                                        <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{c.description?.slice(0, 50) || 'N/A'}</td>
+                                        <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>
+                                            <div style={{ position: 'relative', display: 'inline-block' }}>
+                                                #{c.id || 1000 + i}
+                                                {getRequestsForIssue(c.id).length > 0 && (
+                                                    <Link 
+                                                        to="/admin/ngo-requests"
+                                                        title={`${getRequestsForIssue(c.id).length} NGO requests`}
+                                                        style={{
+                                                            position: 'absolute', top: -8, right: -12,
+                                                            background: 'var(--primary)', color: 'white',
+                                                            fontSize: '9px', padding: '2px 5px', borderRadius: '10px',
+                                                            fontWeight: 800, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '2px'
+                                                        }}
+                                                    >
+                                                        <MdPeople size={10} /> {getRequestsForIssue(c.id).length}
+                                                    </Link>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                                            {c.description?.slice(0, 50) || 'N/A'}
+                                            {localIssues[c.id]?.isAssisted && (
+                                                <div style={{ fontSize: '10px', color: '#10b981', fontWeight: 700, textTransform: 'uppercase', marginTop: '2px' }}>
+                                                    NGO Assisting: {localIssues[c.id].assistantName}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td>
                                             <span className="badge-pill" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', fontSize: 11 }}>
                                                 {c.category || 'General'}

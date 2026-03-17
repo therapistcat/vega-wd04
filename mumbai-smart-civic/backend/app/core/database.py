@@ -56,3 +56,5 @@ async def init_indexes() -> None:
     await db["announcements"].create_index([("created_at", ASCENDING)])
     await db["blockchain_ledger"].create_index("complaint_id", unique=True, sparse=True)
     await db["blockchain_ledger"].create_index("index")
+    await db["ngo_requests"].create_index([("issue_id", ASCENDING)])
+    await db["ngo_requests"].create_index([("ngo_id", ASCENDING)])

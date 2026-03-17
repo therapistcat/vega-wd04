@@ -15,6 +15,10 @@ const DEMO_ACCOUNTS = {
         password: 'Authority@12345',
         authorityCode: 'MUM-COM-4404',
     },
+    ngo: {
+        email: 'ngo@example.com',
+        name: 'Mumbai Care NGO',
+    },
 };
 
 export default function Login({ onSwitch, isFlipped }) {
@@ -34,10 +38,35 @@ export default function Login({ onSwitch, isFlipped }) {
             setAuthorityCode(DEMO_ACCOUNTS.authority.authorityCode);
             return;
         }
+        if (mode === 'ngo') {
+            handleNGOQuickLogin();
+            return;
+        }
         setLoginAs('citizen');
         setEmail(DEMO_ACCOUNTS.citizen.email);
         setPassword(DEMO_ACCOUNTS.citizen.password);
         setAuthorityCode('');
+    };
+
+    const handleNGOQuickLogin = async () => {
+        setError('');
+        setLoading(true);
+        try {
+            const res = await api.post('/auth/mock-ngo-login');
+            const { access_token, role } = res.data;
+            const user = {
+                email: 'contact@ngosahayata.org',
+                name: 'NGO Sahayata',
+                role,
+            };
+            localStorage.setItem('token', access_token);
+            localStorage.setItem('user', JSON.stringify(user));
+            navigate('/ngo/dashboard', { replace: true });
+        } catch (err) {
+            setError(err.response?.data?.detail || 'NGO login failed. Is the backend running?');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -46,16 +75,22 @@ export default function Login({ onSwitch, isFlipped }) {
         setLoading(true);
 
         try {
-            const payload = {
-                email,
-                password,
-                login_as: loginAs,
-            };
-            if (loginAs === 'authority') {
-                payload.authority_code = authorityCode;
+            let res;
+            if (loginAs === 'ngo') {
+                // Call real backend for NGO login
+                res = await api.post('/auth/mock-ngo-login');
+            } else {
+                const payload = {
+                    email,
+                    password,
+                    login_as: loginAs,
+                };
+                if (loginAs === 'authority') {
+                    payload.authority_code = authorityCode;
+                }
+                res = await api.post('/auth/login', payload);
             }
 
-            const res = await api.post('/auth/login', payload);
             const {
                 access_token,
                 role,
@@ -63,9 +98,11 @@ export default function Login({ onSwitch, isFlipped }) {
                 authority_level,
             } = res.data;
 
+            // Fetch user info using /me or use data from response
+            // For now, let's keep it simple: if ngo, we use a generic name if not returned
             const user = {
-                email,
-                name: email.split('@')[0],
+                email: loginAs === 'ngo' ? 'contact@ngosahayata.org' : email,
+                name: loginAs === 'ngo' ? 'NGO Sahayata' : email.split('@')[0],
                 role,
                 authority_rank,
                 authority_level,
@@ -76,6 +113,8 @@ export default function Login({ onSwitch, isFlipped }) {
 
             if (role === 'authority' || role === 'admin') {
                 navigate('/admin/dashboard', { replace: true });
+            } else if (role === 'ngo') {
+                navigate('/ngo/dashboard', { replace: true });
             } else {
                 navigate('/citizen/dashboard', { replace: true });
             }
@@ -113,6 +152,7 @@ export default function Login({ onSwitch, isFlipped }) {
                 >
                         <option value="citizen" style={{ background: '#1e293b' }}>Citizen</option>
                         <option value="authority" style={{ background: '#1e293b' }}>Authority</option>
+                        <option value="ngo" style={{ background: '#1e293b' }}>NGO</option>
                 </InputField>
 
                 <InputField
@@ -187,9 +227,16 @@ export default function Login({ onSwitch, isFlipped }) {
                 <button
                     type="button"
                     onClick={() => fillDemo('authority')}
-                    style={{ flex: 1, padding: '6px 8px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: '12px', cursor: 'pointer' }}
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: '11px', cursor: 'pointer' }}
                 >
                     Authority
+                </button>
+                <button
+                    type="button"
+                    onClick={() => fillDemo('ngo')}
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: '11px', cursor: 'pointer' }}
+                >
+                    NGO
                 </button>
             </div>
 

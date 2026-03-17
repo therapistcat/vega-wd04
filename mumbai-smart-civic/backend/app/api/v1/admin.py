@@ -16,6 +16,7 @@ from app.schemas.complaint_schema import (
     ComplaintStatusUpdateRequest,
     SpatialAnalyticsPoint,
 )
+from app.models.ngo_request_model import NGO_REQUESTS_COLLECTION
 from app.services.spatial_service import compute_spatial_analytics
 
 
@@ -82,6 +83,8 @@ async def list_all_complaints(
     cursor = db[COMPLAINTS_COLLECTION].find({})
     complaints = await cursor.to_list(length=500)
     now = datetime.now(timezone.utc)
+    
+    # Sort complaints as before
     complaints.sort(
         key=lambda row: (
             _authority_rank_score(row, now),
@@ -89,7 +92,34 @@ async def list_all_complaints(
         ),
         reverse=True,
     )
-    return [ComplaintResponse.model_validate(serialize_complaint(item)) for item in complaints]
+
+    # Fetch NGO requests for these complaints to add metadata
+    complaint_ids = [c["_id"] for c in complaints]
+    ngo_requests = await db[NGO_REQUESTS_COLLECTION].find({
+        "issue_id": {"$in": complaint_ids}
+    }).to_list(length=1000)
+
+    # Build lookup map
+    ngo_map = {}
+    for req in ngo_requests:
+        issue_id = str(req["issue_id"])
+        if issue_id not in ngo_map:
+            ngo_map[issue_id] = {"count": 0, "assisting": False, "assistant": None}
+        ngo_map[issue_id]["count"] += 1
+        if req["status"] == "approved":
+            ngo_map[issue_id]["assisting"] = True
+            ngo_map[issue_id]["assistant"] = req["ngo_name"]
+
+    response_list = []
+    for item in complaints:
+        serialized = serialize_complaint(item)
+        metadata = ngo_map.get(serialized["id"], {"count": 0, "assisting": False, "assistant": None})
+        serialized["ngo_request_count"] = metadata["count"]
+        serialized["ngo_assisting"] = metadata["assisting"]
+        serialized["assistant_name"] = metadata["assistant"]
+        response_list.append(ComplaintResponse.model_validate(serialized))
+
+    return response_list
 
 
 @router.patch("/complaints/{complaint_id}/status", response_model=ComplaintResponse)
