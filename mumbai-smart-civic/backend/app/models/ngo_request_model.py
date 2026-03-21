@@ -18,6 +18,7 @@ def build_ngo_request_document(
         "ngo_id": ObjectId(ngo_id),
         "ngo_name": ngo_name,
         "status": "pending",  # pending, approved, rejected
+        "assigned_at": None,
         "created_at": now,
         "updated_at": now,
     }
@@ -30,6 +31,7 @@ def serialize_ngo_request(document: Dict[str, Any]) -> Dict[str, Any]:
         "ngo_id": str(document["ngo_id"]),
         "ngo_name": document["ngo_name"],
         "status": document["status"],
+        "assigned_at": document.get("assigned_at"),
         "created_at": document.get("created_at"),
         "updated_at": document.get("updated_at"),
     }

@@ -31,6 +31,7 @@ const ngoLinks = [
     { to: '/ngo/dashboard', label: 'Dashboard', icon: <MdDashboard /> },
     { to: '/ngo/available-issues', label: 'Available Issues', icon: <MdList /> },
     { to: '/ngo/my-requests', label: 'My Requests', icon: <MdAssignment /> },
+    { to: '/ngo/assigned-issues', label: 'Assigned Issues', icon: <MdVolunteerActivism /> },
 ];
 
 const authorityLinks = [

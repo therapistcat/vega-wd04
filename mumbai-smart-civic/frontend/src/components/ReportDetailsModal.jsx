@@ -70,6 +70,8 @@ export default function ReportDetailsModal({ report, open, onClose }) {
                     <div><strong>Department:</strong> {report.department || report.predicted_department || 'N/A'}</div>
                     <div><strong>Priority:</strong> {report.priority_score ?? '-'}</div>
                     <div><strong>Upvotes:</strong> {report.upvotes_count ?? 0}</div>
+                    <div><strong>NGO:</strong> {report.assigned_ngo_name || 'Not assigned'}</div>
+                    <div><strong>NGO Progress:</strong> {report.progress_status || 'Pending'}</div>
                     <div>
                         <strong>Coordinates:</strong>{' '}
                         {Number.isFinite(lat) && Number.isFinite(lng) ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : 'N/A'}
@@ -112,6 +114,31 @@ export default function ReportDetailsModal({ report, open, onClose }) {
                         </div>
                     )}
                 </div>
+
+                {Array.isArray(report.progress_updates) && report.progress_updates.length > 0 && (
+                    <div className="report-modal-reporter">
+                        <strong>NGO Timeline:</strong>
+                        <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
+                            {report.progress_updates.map((update, index) => (
+                                <div key={`${report.id}-progress-${index}`} className="glass-panel" style={{ padding: 10 }}>
+                                    <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                                        {update.status === 'Resolved' ? '✅' : '🟢'} {update.message}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                                        {update.ngo_name || report.assigned_ngo_name || 'NGO'} | {update.timestamp ? new Date(update.timestamp).toLocaleString() : '-'}
+                                    </div>
+                                    {Array.isArray(update.images) && update.images.length > 0 && (
+                                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                                            {update.images.map((image, imageIndex) => (
+                                                <img key={`${report.id}-progress-${index}-${imageIndex}`} src={image} alt="NGO progress" style={{ width: 88, height: 72, objectFit: 'cover', borderRadius: 8 }} />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {report.resolution_note && (
                     <div className="report-modal-reporter">

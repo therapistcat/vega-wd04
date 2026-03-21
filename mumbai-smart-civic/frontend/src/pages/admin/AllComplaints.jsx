@@ -9,7 +9,7 @@ export default function AllComplaints() {
     const [complaints, setComplaints] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
-    const { getRequestsForIssue, localIssues } = useNGO();
+    const { getRequestsForIssue } = useNGO();
 
     useEffect(() => {
         (async () => {
@@ -117,9 +117,10 @@ export default function AllComplaints() {
                                         </td>
                                         <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                                             {c.description?.slice(0, 50) || 'N/A'}
-                                            {localIssues[c.id]?.isAssisted && (
+                                            {c.assigned_ngo_name && (
                                                 <div style={{ fontSize: '10px', color: '#10b981', fontWeight: 700, textTransform: 'uppercase', marginTop: '2px' }}>
-                                                    NGO Assisting: {localIssues[c.id].assistantName}
+                                                    NGO Assisting: {c.assigned_ngo_name}
+                                                    {c.progress_status ? ` | ${c.progress_status}` : ''}
                                                 </div>
                                             )}
                                         </td>

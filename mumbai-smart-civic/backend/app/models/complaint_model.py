@@ -52,6 +52,10 @@ def build_complaint_document(
         "ngo_request_count": 0,
         "ngo_assisting": False,
         "assistant_name": None,
+        "assigned_ngo_id": None,
+        "assigned_ngo_name": None,
+        "progress_status": "Pending",
+        "progress_updates": [],
         "created_at": now,
         "updated_at": now,
     }
@@ -111,6 +115,10 @@ def serialize_complaint(complaint: Dict[str, Any], viewer_user_id: str | None = 
         "ngo_request_count": int(complaint.get("ngo_request_count", 0)),
         "ngo_assisting": bool(complaint.get("ngo_assisting", False)),
         "assistant_name": complaint.get("assistant_name"),
+        "assigned_ngo_id": str(complaint["assigned_ngo_id"]) if complaint.get("assigned_ngo_id") is not None else None,
+        "assigned_ngo_name": complaint.get("assigned_ngo_name"),
+        "progress_status": complaint.get("progress_status", "Pending"),
+        "progress_updates": complaint.get("progress_updates") or [],
         "created_at": complaint.get("created_at"),
         "updated_at": complaint.get("updated_at"),
     }

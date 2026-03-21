@@ -47,8 +47,21 @@ class ComplaintResponse(BaseModel):
     ngo_request_count: int = 0
     ngo_assisting: bool = False
     assistant_name: str | None = None
+    assigned_ngo_id: str | None = None
+    assigned_ngo_name: str | None = None
+    progress_status: str = "Pending"
+    progress_updates: list[dict] = []
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class ComplaintProgressUpdateItem(BaseModel):
+    message: str
+    timestamp: datetime
+    images: list[str] = []
+    status: str | None = None
+    ngo_id: str | None = None
+    ngo_name: str | None = None
 
 
 class ReporterInfo(BaseModel):

@@ -136,13 +136,25 @@ async def update_complaint_status(
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid complaint id") from exc
 
+    progress_status = "Pending" if payload.status == "Open" else payload.status
+    update_fields = {
+        "status": payload.status,
+        "progress_status": progress_status,
+        "updated_at": datetime.now(timezone.utc),
+    }
+    unset_fields = {}
+    if payload.status != "Resolved":
+        unset_fields = {
+            "resolved_at": "",
+            "resolved_by": "",
+            "fixed_image_url": "",
+        }
+
     await db[COMPLAINTS_COLLECTION].update_one(
         {"_id": oid},
         {
-            "$set": {
-                "status": payload.status,
-                "updated_at": datetime.now(timezone.utc),
-            }
+            "$set": update_fields,
+            **({"$unset": unset_fields} if unset_fields else {}),
         },
     )
 
@@ -185,21 +197,33 @@ async def update_complaint_status_with_proof(
 
     update_fields = {
         "status": status_value,
+        "progress_status": "Pending" if status_value == "Open" else status_value,
         "resolution_note": resolution_note,
         "updated_at": datetime.now(timezone.utc),
-        "resolved_by": {
-            "id": current_user.get("id"),
-            "name": current_user.get("name"),
-            "role": current_user.get("role"),
-            "authority_rank": current_user.get("authority_rank"),
-        },
     }
     if fixed_image_url is not None:
         update_fields["fixed_image_url"] = fixed_image_url
     if status_value == "Resolved":
+        update_fields["resolved_by"] = {
+            "id": current_user.get("id"),
+            "name": current_user.get("name"),
+            "role": current_user.get("role"),
+            "authority_rank": current_user.get("authority_rank"),
+        }
         update_fields["resolved_at"] = datetime.now(timezone.utc)
-
-    await db[COMPLAINTS_COLLECTION].update_one({"_id": oid}, {"$set": update_fields})
+        await db[COMPLAINTS_COLLECTION].update_one({"_id": oid}, {"$set": update_fields})
+    else:
+        await db[COMPLAINTS_COLLECTION].update_one(
+            {"_id": oid},
+            {
+                "$set": update_fields,
+                "$unset": {
+                    "resolved_at": "",
+                    "resolved_by": "",
+                    "fixed_image_url": "",
+                },
+            },
+        )
     complaint = await db[COMPLAINTS_COLLECTION].find_one({"_id": oid})
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")

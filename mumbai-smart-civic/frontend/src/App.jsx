@@ -26,6 +26,7 @@ import BlockedUsers from './pages/admin/BlockedUsers';
 import NGODashboard from './pages/ngo/Dashboard';
 import AvailableIssues from './pages/ngo/AvailableIssues';
 import MyRequests from './pages/ngo/MyAssistanceRequests';
+import AssignedIssues from './pages/ngo/AssignedIssues';
 
 // Context
 import { NGOProvider } from './context/NGOContext';
@@ -103,6 +104,7 @@ export default function App() {
                         <Route path="dashboard" element={<NGODashboard />} />
                         <Route path="available-issues" element={<AvailableIssues />} />
                         <Route path="my-requests" element={<MyRequests />} />
+                        <Route path="assigned-issues" element={<AssignedIssues />} />
                     </Route>
 
                     {/* Admin routes */}

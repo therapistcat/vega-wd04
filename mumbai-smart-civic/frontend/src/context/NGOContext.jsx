@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../utils/api';
 
 const NGOContext = createContext();
@@ -7,7 +7,9 @@ export const useNGO = () => useContext(NGOContext);
 
 export const NGOProvider = ({ children }) => {
     const [ngoRequests, setNgoRequests] = useState([]);
+    const [assignedIssues, setAssignedIssues] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [assignedLoading, setAssignedLoading] = useState(false);
 
     const getUser = () => {
         try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
@@ -31,23 +33,31 @@ export const NGOProvider = ({ children }) => {
         }
     };
 
-    const localIssues = useMemo(() => {
-        const mapping = {};
-        ngoRequests.forEach(req => {
-            if (req.status === 'approved') {
-                const id = req.issue_id || req.issueId;
-                mapping[id] = {
-                    isAssisted: true,
-                    assistantName: req.ngo_name || req.ngoName
-                };
-            }
-        });
-        return mapping;
-    }, [ngoRequests]);
-
     useEffect(() => {
         fetchRequests();
+        fetchAssignedIssues();
     }, []);
+
+    const fetchAssignedIssues = async () => {
+        const user = getUser();
+        if (!user || user.role !== 'ngo') {
+            setAssignedIssues([]);
+            return;
+        }
+        const token = localStorage.getItem('token');
+        setAssignedLoading(true);
+        try {
+            const res = await api.get('/ngo/assigned-issues', {
+                headers: token ? { Authorization: `Bearer ${token}` } : undefined
+            });
+            setAssignedIssues(Array.isArray(res.data) ? res.data : []);
+        } catch (err) {
+            console.warn("Assigned issues fetch failed:", err?.response?.status);
+            setAssignedIssues([]);
+        } finally {
+            setAssignedLoading(false);
+        }
+    };
 
     const addRequest = async (issueId, issueTitle = '') => {
         const token = localStorage.getItem('token');
@@ -72,6 +82,36 @@ export const NGOProvider = ({ children }) => {
         return res.data;
     };
 
+    const updateIssueProgress = async (issueId, payload) => {
+        const token = localStorage.getItem('token');
+        const formData = new FormData();
+        formData.append('status', payload.status);
+        formData.append('message', payload.message);
+        (payload.images || []).forEach((image) => {
+            formData.append('images', image);
+        });
+
+        const res = await api.patch(`/ngo/issues/${issueId}/progress`, formData, {
+            headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+
+        setAssignedIssues((prev) => prev.map((issue) => (
+            issue.id === issueId ? res.data : issue
+        )));
+        return res.data;
+    };
+
+    const getIssueUpdates = async (issueId) => {
+        const token = localStorage.getItem('token');
+        const res = await api.get(`/ngo/issues/${issueId}/updates`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined
+        });
+        return Array.isArray(res.data) ? res.data : [];
+    };
+
     const getRequestsForIssue = (issueId) => {
         return ngoRequests.filter(req => (req.issue_id === issueId || req.issueId === issueId));
     };
@@ -79,12 +119,16 @@ export const NGOProvider = ({ children }) => {
     return (
         <NGOContext.Provider value={{ 
             ngoRequests, 
+            assignedIssues,
             loading,
+            assignedLoading,
             fetchRequests,
+            fetchAssignedIssues,
             addRequest, 
             updateRequestStatus, 
-            getRequestsForIssue,
-            localIssues
+            updateIssueProgress,
+            getIssueUpdates,
+            getRequestsForIssue
         }}>
             {children}
         </NGOContext.Provider>

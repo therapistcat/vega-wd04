@@ -72,7 +72,10 @@ async def list_my_requests(
     current_user: dict = Depends(require_ngo()),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> list[NGORequestResponse]:
-    cursor = db[NGO_REQUESTS_COLLECTION].find({"ngo_id": ObjectId(current_user["id"])}).sort("created_at", -1)
+    ngo_oid = ObjectId(current_user["id"])
+    cursor = db[NGO_REQUESTS_COLLECTION].find(
+        {"ngo_id": {"$in": [ngo_oid, current_user["id"]]}}
+    ).sort("created_at", -1)
     requests = await cursor.to_list(length=100)
     return [NGORequestResponse.model_validate(serialize_ngo_request(r)) for r in requests]
 
@@ -82,8 +85,8 @@ async def list_available_issues(
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> list[ComplaintResponse]:
     _ = current_user
-    # NGOs should see all open complaints
-    cursor = db[COMPLAINTS_COLLECTION].find({"status": "Open"})
+    # NGOs should only see open complaints that are not already assigned.
+    cursor = db[COMPLAINTS_COLLECTION].find({"status": "Open", "assigned_ngo_id": None})
     complaints = await cursor.to_list(length=500)
     
     # Enrichment logic for NGOs
@@ -124,17 +127,62 @@ async def update_request_status(
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid request id") from exc
 
+    existing_request = await db[NGO_REQUESTS_COLLECTION].find_one({"_id": oid})
+    if not existing_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    now = datetime.now(timezone.utc)
+    request_update_fields = {
+        "status": payload.status,
+        "updated_at": now,
+    }
+
+    if payload.status == "approved":
+        complaint = await db[COMPLAINTS_COLLECTION].find_one({"_id": existing_request["issue_id"]})
+        if not complaint:
+            raise HTTPException(status_code=404, detail="Issue not found")
+
+        assigned_ngo_id = complaint.get("assigned_ngo_id")
+        if assigned_ngo_id is not None and str(assigned_ngo_id) != str(existing_request["ngo_id"]):
+            raise HTTPException(status_code=400, detail="Issue already assigned to another NGO")
+
+        request_update_fields["assigned_at"] = now
+
+        await db[COMPLAINTS_COLLECTION].update_one(
+            {"_id": existing_request["issue_id"]},
+            {
+                "$set": {
+                    "assigned_ngo_id": existing_request["ngo_id"],
+                    "assigned_ngo_name": existing_request.get("ngo_name"),
+                    "ngo_assisting": True,
+                    "assistant_name": existing_request.get("ngo_name"),
+                    "progress_status": complaint.get("progress_status") or "Pending",
+                    "updated_at": now,
+                }
+            },
+        )
+    elif payload.status == "rejected":
+        request_update_fields["assigned_at"] = None
+        await db[COMPLAINTS_COLLECTION].update_one(
+            {
+                "_id": existing_request["issue_id"],
+                "assigned_ngo_id": existing_request["ngo_id"],
+            },
+            {
+                "$set": {
+                    "assigned_ngo_id": None,
+                    "assigned_ngo_name": None,
+                    "ngo_assisting": False,
+                    "assistant_name": None,
+                    "updated_at": now,
+                }
+            },
+        )
+
     result = await db[NGO_REQUESTS_COLLECTION].find_one_and_update(
         {"_id": oid},
-        {
-            "$set": {
-                "status": payload.status,
-                "updated_at": datetime.now(timezone.utc),
-            }
-        },
+        {"$set": request_update_fields},
         return_document=ReturnDocument.AFTER,
     )
-    if not result:
-        raise HTTPException(status_code=404, detail="Request not found")
     
     return NGORequestResponse.model_validate(serialize_ngo_request(result))

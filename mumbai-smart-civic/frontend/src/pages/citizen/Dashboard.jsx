@@ -743,6 +743,8 @@ export default function CitizenDashboard() {
                                             <span className="tag">Department: {c.department || c.predicted_department || 'N/A'}</span>
                                             <span className="tag">Priority: {c.priority_score}</span>
                                             {c.source === 'call' && <span className="tag">📞 Reported via Call</span>}
+                                            {c.assigned_ngo_name && <span className="tag">Tracked by NGO: {c.assigned_ngo_name}</span>}
+                                            {c.assigned_ngo_name && <span className="tag">NGO Progress: {c.progress_status || 'Pending'}</span>}
                                         </div>
                                         {c.image_url && (
                                             <div className="feed-image-wrap">

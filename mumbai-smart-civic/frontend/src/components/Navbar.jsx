@@ -10,10 +10,15 @@ const pageTitles = {
     '/citizen/heatmap': 'Heatmap',
     '/citizen/blockchain-ledger': 'Chain Ledger',
     '/citizen/notifications': 'Notifications',
+    '/ngo/dashboard': 'NGO Dashboard',
+    '/ngo/available-issues': 'Available Issues',
+    '/ngo/my-requests': 'My Requests',
+    '/ngo/assigned-issues': 'Assigned Issues',
     '/admin/dashboard': 'Dashboard',
     '/admin/all-complaints': 'All Complaints',
     '/admin/resolve': 'Resolve Complaints',
     '/admin/analytics': 'Analytics',
+    '/admin/ngo-requests': 'NGO Requests',
 };
 
 export default function Navbar({ onMenuClick }) {

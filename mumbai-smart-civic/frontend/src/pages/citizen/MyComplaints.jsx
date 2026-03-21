@@ -367,6 +367,25 @@ export default function MyComplaints() {
                                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                                         Status: {c.status} | Priority: {c.priority_score}
                                     </div>
+                                    {c.assigned_ngo_name && (
+                                        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                                            Tracked by NGO: <strong style={{ color: 'var(--text-primary)' }}>{c.assigned_ngo_name}</strong> | Progress: {c.progress_status || 'Pending'}
+                                        </div>
+                                    )}
+                                    {Array.isArray(c.progress_updates) && c.progress_updates.length > 0 && (
+                                        <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+                                            {c.progress_updates.slice(-2).reverse().map((update, index) => (
+                                                <div key={`${c.id}-progress-${index}`} className="glass-panel" style={{ padding: 8, fontSize: 12 }}>
+                                                    <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                                                        {update.status === 'Resolved' ? '✅' : '🟢'} {update.message}
+                                                    </div>
+                                                    <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+                                                        {update.timestamp ? new Date(update.timestamp).toLocaleString() : '-'}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                     {c.fixed_image_url && (
                                         <div style={{ marginTop: 10 }}>
                                             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Resolution proof</div>
