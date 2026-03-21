@@ -84,6 +84,7 @@ export default function AllComplaints() {
                                     <th>ID</th>
                                     <th>Description</th>
                                     <th>Category</th>
+                                    <th>Source</th>
                                     <th>Location</th>
                                     <th>Status</th>
                                     <th>Cluster</th>
@@ -125,6 +126,11 @@ export default function AllComplaints() {
                                         <td>
                                             <span className="badge-pill" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', fontSize: 11 }}>
                                                 {c.category || 'General'}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span className="badge-pill" style={{ background: c.source === 'call' ? 'rgba(37, 99, 235, 0.12)' : 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: c.source === 'call' ? 'var(--primary)' : 'var(--text-secondary)', fontSize: 11 }}>
+                                                {c.source === 'call' ? 'Call' : 'Web'}
                                             </span>
                                         </td>
                                         <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -176,7 +182,9 @@ export default function AllComplaints() {
                                         </td>
                                         <td>
                                             <button 
+                                                disabled={!c.user_id}
                                                 onClick={() => {
+                                                    if (!c.user_id) return;
                                                     const reason = window.prompt(`Block user ${c.user_id}? Enter reason:`);
                                                     if (reason) {
                                                         api.post(`/moderation/block/${c.user_id}`, { reason })
@@ -188,14 +196,14 @@ export default function AllComplaints() {
                                                 style={{ 
                                                     padding: '4px 8px', 
                                                     fontSize: 11, 
-                                                    color: '#ef4444', 
-                                                    borderColor: 'rgba(239, 68, 68, 0.2)',
+                                                    color: !c.user_id ? 'var(--text-muted)' : '#ef4444', 
+                                                    borderColor: !c.user_id ? 'var(--glass-border-subtle)' : 'rgba(239, 68, 68, 0.2)',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     gap: 4
                                                 }}
                                             >
-                                                Block
+                                                {!c.user_id ? 'No User' : 'Block'}
                                             </button>
                                         </td>
                                     </tr>

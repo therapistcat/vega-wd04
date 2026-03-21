@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.database import get_database
@@ -11,8 +11,68 @@ from app.core.security import verify_vapi_token
 from app.models.complaint_model import COMPLAINTS_COLLECTION, build_complaint_document
 from app.services.call_service import parse_call_to_complaint
 from app.services.clustering_service import process_issue as cluster_process_issue
+from app.services.geo_service import run_st_dbscan_clustering, update_intensity_scores
+from app.services.ml_service import compute_priority_score, predict_department
 
 router = APIRouter(prefix="/vapi", tags=["vapi"])
+
+
+def _nested_get(payload: dict[str, Any], *path: str) -> Any:
+    current: Any = payload
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _extract_call_id(body: dict[str, Any]) -> str | None:
+    candidates = [
+        _nested_get(body, "call", "id"),
+        _nested_get(body, "message", "call", "id"),
+        _nested_get(body, "message", "callId"),
+        body.get("callId"),
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
+
+
+def _extract_event_type(body: dict[str, Any]) -> str:
+    candidates = [
+        body.get("type"),
+        _nested_get(body, "message", "type"),
+        _nested_get(body, "message", "eventType"),
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return "unknown"
+
+
+def _extract_summary(body: dict[str, Any]) -> str | None:
+    candidates = [
+        _nested_get(body, "message", "analysis", "summary"),
+        _nested_get(body, "analysis", "summary"),
+        body.get("summary"),
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
+
+
+def _extract_transcript(body: dict[str, Any]) -> str | None:
+    candidates = [
+        body.get("transcript"),
+        _nested_get(body, "message", "transcript"),
+        _nested_get(body, "message", "artifact", "transcript"),
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
 
 
 @router.get("/ping")
@@ -23,136 +83,117 @@ async def vapi_ping(_: bool = Depends(verify_vapi_token)) -> dict[str, Any]:
 @router.post("/webhook")
 async def vapi_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
+    _: bool = Depends(verify_vapi_token),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> dict[str, Any]:
     try:
-        # 1. AUTH HANDLING
-        auth = request.headers.get("Authorization")
-        if not auth:
-            print("WARNING: Missing Authorization header")
-        
-        # 2. SAFE PAYLOAD HANDLING
-        try:
-            payload_data = await request.json()
-            if not isinstance(payload_data, dict):
-                payload_data = {}
-        except Exception:
-            payload_data = {}
-        print("WEBHOOK RECEIVED:", payload_data)
+        body = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
 
-        now = datetime.now(timezone.utc)
-        
-        # 3. EXTRACT IMPORTANT FIELDS
-        call_object = payload_data.get("call")
-        if not isinstance(call_object, dict):
-            call_object = {}
-            
-        message_object = payload_data.get("message")
-        if not isinstance(message_object, dict):
-            message_object = {}
-            
-        message_call_object = message_object.get("call")
-        if not isinstance(message_call_object, dict):
-            message_call_object = {}
-        
-        call_id_val = call_object.get("id")
-        if not call_id_val:
-            call_id_val = message_call_object.get("id")
-            
-        call_id = str(call_id_val) if call_id_val else ""
+    call_id = _extract_call_id(body)
+    event_type = _extract_event_type(body)
+    transcript = _extract_transcript(body)
+    summary = _extract_summary(body)
 
-        event_type_val = payload_data.get("type") or payload_data.get("event")
-        if not event_type_val:
-            event_type_val = message_object.get("type")
-            
-        event_type = str(event_type_val) if event_type_val else "unknown"
+    event_doc = {
+        "receivedAt": datetime.now(timezone.utc),
+        "callId": call_id,
+        "type": event_type,
+        "payload": body,
+    }
+    await db["vapi_events"].insert_one(event_doc)
 
-        await db["vapi_events"].insert_one(
-            {
-                "call_id": call_id or None,
-                "event_type": event_type,
-                "payload": payload_data,
-                "created_at": now,
-            }
-        )
+    complaint_created = False
+    complaint_id: str | None = None
 
-        transcript_val = payload_data.get("transcript")
-        if not transcript_val:
-            transcript_val = message_object.get("transcript")
-        transcript = str(transcript_val) if transcript_val else ""
-
-        caller_object = payload_data.get("caller")
-        if not isinstance(caller_object, dict):
-            caller_object = message_call_object.get("customer")
-            if not isinstance(caller_object, dict):
-                caller_object = {}
-        
-        phone_number = caller_object.get("number")
-            
-        duration = payload_data.get("duration")
-        if not duration:
-            duration = message_object.get("duration")
-
-        if transcript and call_id:
-            # 4. EXTRACT COMPLAINT SUMMARY
-            if "Complaint Summary:" in transcript:
-                summary = transcript.split("Complaint Summary:")[-1].strip()
+    try:
+        if event_type == "end-of-call-report" and call_id:
+            existing = await db[COMPLAINTS_COLLECTION].find_one(
+                {"call_metadata.call_id": call_id},
+                {"_id": 1},
+            )
+            if existing:
+                complaint_id = str(existing["_id"])
             else:
-                summary = transcript
+                raw_call_text = (summary or transcript or "").strip()
+                if raw_call_text:
+                    parsed = parse_call_to_complaint(summary or "", transcript=transcript)
+                    complaint_text = parsed.get("description") or parsed.get("summary") or ""
+                    department = await predict_department(
+                        complaint_text,
+                        parsed["category"],
+                    )
+                    phone_number = (
+                        _nested_get(body, "call", "customer", "number")
+                        or _nested_get(body, "message", "call", "customer", "number")
+                        or "unknown"
+                    )
+                    duration = (
+                        _nested_get(body, "call", "duration")
+                        or _nested_get(body, "message", "call", "duration")
+                    )
 
-            # 7. PREVENT DUPLICATES
-            existing = await db[COMPLAINTS_COLLECTION].find_one({"call_metadata.call_id": call_id})
-            if not existing:
-                # 5. CREATE COMPLAINT
-                title = summary[:80] if summary else "Voice Complaint"
-                
-                metadata = {
-                    "phone_number": phone_number,
-                    "call_id": call_id,
-                    "duration": duration,
-                    "transcript": transcript
-                }
-                
-                complaint_doc = build_complaint_document(
-                    user_id=None,
-                    description=summary,
-                    category="general", # Per objective
-                    ward="Unknown Ward",
-                    source="call",
-                    call_metadata=metadata
-                )
-                # Overwrite defaults to match objective exactly
-                complaint_doc["title"] = title
-                complaint_doc["department"] = "general"
-                complaint_doc["status"] = "Open"
-                
-                # 6. STORE IN MONGODB
-                await db[COMPLAINTS_COLLECTION].insert_one(complaint_doc)
+                    complaint_doc = build_complaint_document(
+                        user_id=None,
+                        description=complaint_text,
+                        category=parsed["category"],
+                        ward=parsed["ward"],
+                        priority_score=compute_priority_score(parsed["category"]),
+                        predicted_department=department,
+                        source="call",
+                        call_metadata={
+                            "call_id": call_id,
+                            "event_type": event_type,
+                            "phone_number": phone_number,
+                            "duration": duration,
+                            "summary": parsed.get("summary"),
+                            "problem": parsed.get("problem"),
+                            "location_text": parsed.get("location"),
+                            "details": parsed.get("details"),
+                            "transcript": transcript,
+                        },
+                    )
+                    complaint_doc["reported_by_name"] = "Voice Hotline"
+                    complaint_doc["title"] = parsed["title"]
+                    complaint_doc["is_verified"] = False
+                    if parsed.get("landmark"):
+                        complaint_doc["landmark"] = parsed["landmark"]
 
-                # Cluster the new complaint
-                try:
+                    insert_result = await db[COMPLAINTS_COLLECTION].insert_one(complaint_doc)
+                    complaint_id = str(insert_result.inserted_id)
+
                     cluster_result = await cluster_process_issue(
                         db,
-                        category="general",
-                        location="Unknown Ward",
-                        description=summary,
-                        complaint_id=str(complaint_doc.get("_id", "")),
+                        category=parsed["category"],
+                        location=parsed.get("location") or parsed["ward"],
+                        description=complaint_text,
+                        complaint_id=complaint_id,
                         source="call",
                     )
                     await db[COMPLAINTS_COLLECTION].update_one(
-                        {"call_metadata.call_id": call_id},
-                        {"$set": {
-                            "cluster_id": cluster_result["cluster_id"],
-                            "is_duplicate": cluster_result["is_duplicate"],
-                        }},
+                        {"_id": insert_result.inserted_id},
+                        {
+                            "$set": {
+                                "cluster_id": cluster_result["cluster_id"],
+                                "is_duplicate": cluster_result["is_duplicate"],
+                                "updated_at": datetime.now(timezone.utc),
+                            }
+                        },
                     )
-                except Exception as ce:
-                    print(f"[clustering/vapi] error: {ce}")
+                    complaint_created = True
+                    background_tasks.add_task(run_st_dbscan_clustering, db)
+                    background_tasks.add_task(update_intensity_scores, db)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to process Vapi complaint: {exc}") from exc
 
-        # 8. ALWAYS RETURN RESPONSE
-        return {"ok": True, "message": "Webhook processed"}
-
-    except Exception as e:
-        # 9. FULL ERROR SAFETY
-        print("ERROR:", str(e))
-        return {"ok": False}
+    return {
+        "status": "success",
+        "callId": call_id,
+        "eventType": event_type,
+        "complaintCreated": complaint_created,
+        "complaintId": complaint_id,
+    }

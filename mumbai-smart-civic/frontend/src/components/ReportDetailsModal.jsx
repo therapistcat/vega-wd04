@@ -85,7 +85,24 @@ export default function ReportDetailsModal({ report, open, onClose }) {
                                 <div><strong>Caller:</strong> {report.call_metadata?.phone_number || 'Unknown'}</div>
                                 <div><strong>Call ID:</strong> {report.call_metadata?.call_id || 'N/A'}</div>
                                 {report.call_metadata?.duration && <div><strong>Duration:</strong> {report.call_metadata?.duration}s</div>}
+                                {report.call_metadata?.location_text && <div><strong>Location:</strong> {report.call_metadata?.location_text}</div>}
                             </div>
+                            {report.call_metadata?.summary && (
+                                <div style={{ marginTop: 10 }}>
+                                    <strong>Summary:</strong>
+                                    <p style={{ fontSize: 13, background: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 4, marginTop: 4, whiteSpace: 'pre-wrap' }}>
+                                        {report.call_metadata.summary}
+                                    </p>
+                                </div>
+                            )}
+                            {report.call_metadata?.details && report.call_metadata.details !== report.call_metadata.summary && (
+                                <div style={{ marginTop: 10 }}>
+                                    <strong>Details:</strong>
+                                    <p style={{ fontSize: 13, background: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 4, marginTop: 4, whiteSpace: 'pre-wrap' }}>
+                                        {report.call_metadata.details}
+                                    </p>
+                                </div>
+                            )}
                             <div style={{ marginTop: 10 }}>
                                 <strong>Transcript:</strong>
                                 <p style={{ fontSize: 13, background: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 4, marginTop: 4, whiteSpace: 'pre-wrap' }}>

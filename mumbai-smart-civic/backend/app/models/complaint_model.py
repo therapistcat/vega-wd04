@@ -77,9 +77,12 @@ def serialize_complaint(complaint: Dict[str, Any], viewer_user_id: str | None = 
     if viewer_oid is not None:
         has_upvoted = viewer_oid in upvoted_by
 
+    user_id = complaint.get("user_id")
+    serialized_user_id = str(user_id) if user_id is not None else ""
+
     return {
         "id": str(complaint["_id"]),
-        "user_id": str(complaint["user_id"]),
+        "user_id": serialized_user_id,
         "reported_by_name": complaint.get("reported_by_name"),
         "description": complaint["description"],
         "landmark": complaint.get("landmark"),
