@@ -39,6 +39,7 @@ const authorityLinks = [
     { to: '/admin/all-complaints', label: 'All Complaints', icon: <MdList /> },
     { to: '/admin/ngo-requests', label: 'NGO Requests', icon: <MdVolunteerActivism /> },
     { to: '/admin/resolve', label: 'Resolve', icon: <MdCheckCircle /> },
+    { to: '/admin/blockchain-ledger', label: 'Ledger', icon: <MdLink /> },
     { to: '/admin/analytics', label: 'Analytics', icon: <MdAnalytics /> },
     { to: '/admin/traffic-prediction', label: 'Traffic AI', icon: <MdInsights /> },
     { to: '/admin/blocked', label: 'Blocked Users', icon: <MdBlock /> },

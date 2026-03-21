@@ -6,6 +6,7 @@ from pymongo import ReturnDocument
 
 from app.core.database import get_database
 from app.core.security import require_authority, require_ngo
+from app.blockchain.ledger_service import log_ngo_assigned
 from app.models.ngo_request_model import (
     NGO_REQUESTS_COLLECTION,
     build_ngo_request_document,
@@ -184,5 +185,15 @@ async def update_request_status(
         {"$set": request_update_fields},
         return_document=ReturnDocument.AFTER,
     )
-    
+
+    if payload.status == "approved":
+        updated_issue = await db[COMPLAINTS_COLLECTION].find_one({"_id": existing_request["issue_id"]})
+        if updated_issue:
+            await log_ngo_assigned(
+                db,
+                issue=updated_issue,
+                actor=current_user,
+                ngo_name=existing_request.get("ngo_name"),
+            )
+
     return NGORequestResponse.model_validate(serialize_ngo_request(result))

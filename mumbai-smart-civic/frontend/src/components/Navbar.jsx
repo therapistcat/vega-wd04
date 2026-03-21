@@ -17,6 +17,7 @@ const pageTitles = {
     '/ngo/assigned-issues': 'Assigned Issues',
     '/admin/dashboard': 'Dashboard',
     '/admin/all-complaints': 'All Complaints',
+    '/admin/blockchain-ledger': 'Blockchain Ledger',
     '/admin/resolve': 'Resolve Complaints',
     '/admin/analytics': 'Analytics',
     '/admin/ngo-requests': 'NGO Requests',

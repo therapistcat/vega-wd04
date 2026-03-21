@@ -19,6 +19,7 @@ import AdminDashboard from './pages/admin/Dashboard';
 import AllComplaints from './pages/admin/AllComplaints';
 import ResolveComplaint from './pages/admin/ResolveComplaint';
 import Analytics from './pages/admin/Analytics';
+import AdminBlockchainLedger from './pages/admin/BlockchainLedger';
 import NGORequests from './pages/admin/NGORequests';
 import TrafficPrediction from './pages/admin/TrafficPrediction';
 import BlockedUsers from './pages/admin/BlockedUsers';
@@ -135,6 +136,7 @@ export default function App() {
                         <Route path="all-complaints" element={<AllComplaints />} />
                         <Route path="resolve" element={<ResolveComplaint />} />
                         <Route path="analytics" element={<Analytics />} />
+                        <Route path="blockchain-ledger" element={<AdminBlockchainLedger />} />
                         <Route path="ngo-requests" element={<NGORequests />} />
                         <Route path="traffic-prediction" element={<TrafficPrediction />} />
                         <Route path="blocked" element={<BlockedUsers />} />

@@ -10,6 +10,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.database import get_database
 from app.core.security import require_roles
+from app.blockchain.ledger_service import log_complaint_created
 from app.models.complaint_model import (
     COMPLAINTS_COLLECTION,
     build_complaint_document,
@@ -426,6 +427,11 @@ async def create_complaint(
 
     background_tasks.add_task(run_st_dbscan_clustering, db)
     background_tasks.add_task(update_intensity_scores, db)
+    await log_complaint_created(
+        db,
+        issue=inserted,
+        actor=current_user,
+    )
 
     return ComplaintResponse.model_validate(serialize_complaint(inserted, viewer_user_id=current_user["id"]))
 

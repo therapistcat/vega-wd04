@@ -253,6 +253,7 @@ Seed includes:
 ### Authority/Admin
 - `/admin/dashboard`
 - `/admin/all-complaints`
+- `/admin/blockchain-ledger`
 - `/admin/resolve`
 - `/admin/analytics`
 
@@ -297,6 +298,9 @@ Base prefix: `/api/v1`
 
 ### Blockchain
 - `GET /blockchain/chain`
+- `GET /blockchain/ledger`
+- `GET /blockchain/verify`
+- `GET /blockchain/issue/{id}`
 - `POST /blockchain/anchor/{complaint_id}`
 - `GET /blockchain/verify/{complaint_id}`
 - `POST /blockchain/anchor-all`
@@ -402,6 +406,38 @@ Context includes user role and optional coordinates.
 - Genesis block + chain linking + proof-of-work fields
 - Can anchor single complaint or all current user complaints
 - Verification API checks anchored snapshot integrity vs current state
+
+## Blockchain Transparency Layer
+
+Purpose:
+- Prevent tampering of important civic actions
+- Preserve accountability across citizen, NGO, and authority workflows
+- Give admins a transparent audit trail for issue lifecycle decisions
+
+How it works:
+- Important events are written as append-only audit blocks into MongoDB collection `blockchain_ledger`
+- Each audit block stores structured event data, the previous block hash, and a SHA-256 hash of its own contents
+- A dedicated verification endpoint walks the audit chain and detects broken hash links or modified records
+
+Events tracked:
+- Complaint creation
+- NGO assignment approval
+- Issue progress updates
+- Issue resolution
+
+API endpoints:
+- `GET /blockchain/ledger`
+- `GET /blockchain/verify`
+- `GET /blockchain/issue/{id}`
+
+Tech used:
+- SHA-256 hashing
+- MongoDB append-only ledger storage
+- FastAPI route integration
+
+Demo explanation:
+- If any stored block data or previous hash is modified manually in MongoDB, the verification step fails
+- The admin blockchain ledger page highlights this state with an invalid/tampering warning so the break is visible immediately
 
 ## Vapi Integration
 

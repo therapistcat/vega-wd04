@@ -8,6 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.database import get_database
 from app.core.security import require_ngo
+from app.blockchain.ledger_service import log_issue_resolved, log_issue_updated
 from app.models.complaint_model import COMPLAINTS_COLLECTION, serialize_complaint
 from app.models.ngo_request_model import NGO_REQUESTS_COLLECTION
 from app.schemas.complaint_schema import ComplaintProgressUpdateItem, ComplaintResponse
@@ -252,6 +253,20 @@ async def update_issue_progress(
     updated = await db[COMPLAINTS_COLLECTION].find_one({"_id": issue_oid})
     if not updated:
         raise HTTPException(status_code=404, detail="Issue not found")
+
+    await log_issue_updated(
+        db,
+        issue=updated,
+        actor=current_user,
+        message=message.strip(),
+    )
+    if status_value == "Resolved":
+        await log_issue_resolved(
+            db,
+            issue=updated,
+            actor=current_user,
+            message=message.strip(),
+        )
 
     return ComplaintResponse.model_validate(serialize_complaint(updated))
 

@@ -10,6 +10,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.core.config import settings
 from app.core.database import get_database
 from app.core.security import require_authority
+from app.blockchain.ledger_service import log_issue_resolved, log_issue_updated
 from app.models.complaint_model import COMPLAINTS_COLLECTION, serialize_complaint
 from app.schemas.complaint_schema import (
     ComplaintResponse,
@@ -164,6 +165,20 @@ async def update_complaint_status(
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
 
+    await log_issue_updated(
+        db,
+        issue=complaint,
+        actor=current_user,
+        message=f"Authority changed issue status to {payload.status}",
+    )
+    if payload.status == "Resolved":
+        await log_issue_resolved(
+            db,
+            issue=complaint,
+            actor=current_user,
+            message="Authority resolved issue",
+        )
+
     return ComplaintResponse.model_validate(serialize_complaint(complaint))
 
 
@@ -229,6 +244,20 @@ async def update_complaint_status_with_proof(
     complaint = await db[COMPLAINTS_COLLECTION].find_one({"_id": oid})
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
+
+    await log_issue_updated(
+        db,
+        issue=complaint,
+        actor=current_user,
+        message=f"Authority updated issue status to {status_value}",
+    )
+    if status_value == "Resolved":
+        await log_issue_resolved(
+            db,
+            issue=complaint,
+            actor=current_user,
+            message=resolution_note or "Authority resolved issue with proof",
+        )
 
     return ComplaintResponse.model_validate(serialize_complaint(complaint))
 
