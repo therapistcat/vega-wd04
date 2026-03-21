@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Circle, CircleMarker, Popup, useMapEvents } from 'react-leaflet';
 import MapComponent from '../../components/MapComponent';
 import HeatmapLayer from '../../components/HeatmapLayer';
+import NearbyIssueClusterLayer from '../../components/NearbyIssueClusterLayer';
 import MapLegend from '../../components/MapLegend';
 import ReportDetailsModal from '../../components/ReportDetailsModal';
 import api from '../../utils/api';
-import { CircleMarker, Popup } from 'react-leaflet';
 
 const DEFAULT_CENTER = { lat: 19.048728, lng: 72.910852 };
 const REFRESH_INTERVAL_MS = 15000;
@@ -38,7 +40,24 @@ function sanitizePoints(rawPoints) {
         .filter(Boolean);
 }
 
+function formatDistance(distance) {
+    const meters = Number(distance || 0);
+    if (meters >= 1000) return `${(meters / 1000).toFixed(2)} km`;
+    return `${Math.round(meters)} m`;
+}
+
+function MapClickCapture({ onClick }) {
+    useMapEvents({
+        click(event) {
+            onClick?.(event.latlng);
+        },
+    });
+    return null;
+}
+
 export default function Heatmap() {
+    const navigate = useNavigate();
+    const location = useLocation();
     const [points, setPoints] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -55,6 +74,10 @@ export default function Heatmap() {
     const [selectedReport, setSelectedReport] = useState(null);
     const [showReportModal, setShowReportModal] = useState(false);
     const [detailsLoading, setDetailsLoading] = useState(false);
+    const [nearbyIssues, setNearbyIssues] = useState([]);
+    const [nearbyLoading, setNearbyLoading] = useState(false);
+    const [clickedPoint, setClickedPoint] = useState(null);
+    const [nearbyRadius, setNearbyRadius] = useState(2000);
     const centerRef = useRef(center);
 
     const fetchHeatmap = async (lat, lng, showLoader = false) => {
@@ -77,6 +100,22 @@ export default function Heatmap() {
             setPoints([]);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchNearbyIssues = async (lat, lng, radius = nearbyRadius) => {
+        setNearbyLoading(true);
+        try {
+            const res = await api.get('/issues/nearby', {
+                params: { lat, lng, radius },
+            });
+            setNearbyIssues(Array.isArray(res.data) ? res.data : []);
+            setError('');
+        } catch (err) {
+            setNearbyIssues([]);
+            setError(toErrorMessage(err, 'Unable to load nearby issues'));
+        } finally {
+            setNearbyLoading(false);
         }
     };
 
@@ -129,6 +168,26 @@ export default function Heatmap() {
             clearInterval(interval);
         };
     }, []);
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const lat = Number(params.get('lat'));
+        const lng = Number(params.get('lng'));
+        const radius = Number(params.get('radius') || 2000);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            const nextCenter = [lat, lng];
+            setCenter(nextCenter);
+            centerRef.current = nextCenter;
+            setClickedPoint({ lat, lng });
+            setNearbyRadius(radius);
+        }
+    }, [location.search]);
+
+    useEffect(() => {
+        if (clickedPoint?.lat && clickedPoint?.lng) {
+            fetchNearbyIssues(clickedPoint.lat, clickedPoint.lng, nearbyRadius);
+        }
+    }, [clickedPoint, nearbyRadius]);
 
     const loadAreaReports = async () => {
         setAreaLoading(true);
@@ -183,6 +242,11 @@ export default function Heatmap() {
         return `Centered near ${lat.toFixed(6)}, ${lng.toFixed(6)} | Refreshes every ${REFRESH_INTERVAL_MS / 1000}s | Location: ${locationSource}`;
     }, [center, locationSource]);
 
+    const nearbySubtitle = useMemo(() => {
+        if (!clickedPoint) return 'Click anywhere on the map to inspect nearby issues.';
+        return `${nearbyIssues.length} nearby issue${nearbyIssues.length === 1 ? '' : 's'} within ${formatDistance(nearbyRadius)} of ${clickedPoint.lat.toFixed(5)}, ${clickedPoint.lng.toFixed(5)}`;
+    }, [clickedPoint, nearbyIssues.length, nearbyRadius]);
+
     return (
         <div className="page-container" id="heatmap-page">
             <div style={{ marginBottom: 18 }}>
@@ -196,10 +260,10 @@ export default function Heatmap() {
                 </p>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
-                <button 
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <button
                     type="button"
-                    className="btn btn-primary-filled" 
+                    className="btn btn-primary-filled"
                     onClick={async () => {
                         const [lat, lng] = await requestUserLocation();
                         const newCenter = [lat, lng];
@@ -209,11 +273,11 @@ export default function Heatmap() {
                     }}
                     style={{ padding: '8px 16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
-                    <span style={{ fontSize: '18px' }}>📍</span> Locate Me
+                    <span style={{ fontSize: '18px' }}>Locate</span>
                 </button>
-                <button 
+                <button
                     type="button"
-                    className="btn btn-ghost" 
+                    className="btn btn-ghost"
                     onClick={() => fetchHeatmap(center[0], center[1], true)}
                     style={{ padding: '8px 16px', fontSize: '13px' }}
                 >
@@ -227,12 +291,46 @@ export default function Heatmap() {
                 </div>
             )}
 
+            <div className="table-glass-container" style={{ marginBottom: 14 }}>
+                <div className="table-head">
+                    <h3 className="table-title">Nearby Issue Explorer</h3>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <select
+                            className="form-input nearby-radius-select"
+                            value={nearbyRadius}
+                            onChange={(e) => setNearbyRadius(Number(e.target.value))}
+                        >
+                            <option value={1000}>1 km radius</option>
+                            <option value={1500}>1.5 km radius</option>
+                            <option value={2000}>2 km radius</option>
+                        </select>
+                        <button
+                            type="button"
+                            className="btn btn-ghost"
+                            disabled={!clickedPoint || nearbyLoading}
+                            onClick={() => clickedPoint && fetchNearbyIssues(clickedPoint.lat, clickedPoint.lng, nearbyRadius)}
+                        >
+                            {nearbyLoading ? 'Loading Pins...' : 'Refresh Pins'}
+                        </button>
+                    </div>
+                </div>
+                <div style={{ padding: 14, fontSize: 13, color: 'var(--text-muted)' }}>
+                    {nearbySubtitle}
+                </div>
+            </div>
+
             {loading ? (
                 <div className="skeleton heatmap-skeleton" />
             ) : (
                 <div>
                     <div className="heatmap-shell">
                         <MapComponent center={center} zoom={16} style={{ height: 'min(62vh, 560px)', minHeight: '320px' }}>
+                            <MapClickCapture
+                                onClick={(latlng) => {
+                                    setClickedPoint({ lat: latlng.lat, lng: latlng.lng });
+                                }}
+                            />
+
                             <CircleMarker
                                 center={center}
                                 radius={locationSource === 'live' ? 12 : 9}
@@ -241,12 +339,12 @@ export default function Heatmap() {
                                     fillColor: locationSource === 'live' ? '#60a5fa' : '#10b981',
                                     fillOpacity: 0.8,
                                     weight: 3,
-                                    className: locationSource === 'live' ? 'user-location-pulse' : ''
+                                    className: locationSource === 'live' ? 'user-location-pulse' : '',
                                 }}
                             >
                                 <Popup>
                                     <div style={{ textAlign: 'center' }}>
-                                        <strong>You are here</strong><br/>
+                                        <strong>You are here</strong><br />
                                         <span style={{ fontSize: '11px', color: '#666' }}>
                                             {locationSource === 'live' ? 'Live Geolocation' : 'Default Mumbai Center'}
                                         </span>
@@ -264,6 +362,28 @@ export default function Heatmap() {
                                     blur={22}
                                     maxZoom={17}
                                     max={1.0}
+                                />
+                            )}
+
+                            {clickedPoint && (
+                                <Circle
+                                    center={[clickedPoint.lat, clickedPoint.lng]}
+                                    radius={nearbyRadius}
+                                    pathOptions={{
+                                        color: '#2563eb',
+                                        fillColor: '#60a5fa',
+                                        fillOpacity: 0.08,
+                                        weight: 2,
+                                    }}
+                                />
+                            )}
+
+                            {nearbyIssues.length > 0 && (
+                                <NearbyIssueClusterLayer
+                                    issues={nearbyIssues}
+                                    onViewDetails={(issue) => {
+                                        navigate(`/issues/nearby?lat=${clickedPoint?.lat ?? center[0]}&lng=${clickedPoint?.lng ?? center[1]}&radius=${nearbyRadius}&focus=${issue.id}`);
+                                    }}
                                 />
                             )}
                         </MapComponent>

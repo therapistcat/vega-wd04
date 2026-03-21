@@ -8,6 +8,7 @@ const pageTitles = {
     '/citizen/progress-dashboard': 'Progress Dashboard',
     '/citizen/my-complaints': 'My Complaints',
     '/citizen/heatmap': 'Heatmap',
+    '/issues/nearby': 'Nearby Issues',
     '/citizen/blockchain-ledger': 'Chain Ledger',
     '/citizen/notifications': 'Notifications',
     '/ngo/dashboard': 'NGO Dashboard',

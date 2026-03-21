@@ -64,6 +64,23 @@ class ComplaintProgressUpdateItem(BaseModel):
     ngo_name: str | None = None
 
 
+class NearbyIssueResponse(BaseModel):
+    id: str
+    description: str
+    status: ComplaintStatus
+    progress_status: str = "Pending"
+    display_status: str = "Pending"
+    latitude: float
+    longitude: float
+    distance_m: float = 0.0
+    assigned_ngo_name: str | None = None
+    priority_score: float = 0.0
+    ward: str | None = None
+    category: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class ReporterInfo(BaseModel):
     id: str
     name: str

@@ -4134,3 +4134,199 @@ textarea {
   }
 }
 
+.nearby-radius-select,
+.nearby-sort-select {
+  min-width: 150px;
+  padding: 10px 12px;
+}
+
+.nearby-issue-marker-wrapper,
+.nearby-cluster-wrapper {
+  background: transparent;
+  border: none;
+}
+
+.nearby-issue-marker {
+  width: 18px;
+  height: 18px;
+  display: block;
+  border-radius: 999px;
+  border: 3px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.28);
+}
+
+.nearby-issue-marker-pending {
+  background: #ef4444;
+}
+
+.nearby-issue-marker-in-progress {
+  background: #f59e0b;
+}
+
+.nearby-issue-marker-resolved {
+  background: #10b981;
+}
+
+.nearby-cluster-marker {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.9), rgba(14, 165, 233, 0.92));
+  color: #fff;
+  font-weight: 800;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 14px 24px rgba(37, 99, 235, 0.28);
+}
+
+.nearby-popup-card {
+  display: grid;
+  gap: 8px;
+  min-width: 220px;
+}
+
+.nearby-popup-title {
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.nearby-popup-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.nearby-popup-ngo {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.nearby-popup-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.nearby-popup-badge-pending {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.nearby-popup-badge-in-progress {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+.nearby-popup-badge-resolved {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+}
+
+.nearby-popup-button {
+  width: 100%;
+  justify-content: center;
+}
+
+.nearby-dashboard-hero {
+  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.nearby-dashboard-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.nearby-dashboard-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 18px;
+}
+
+.nearby-issue-list {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.nearby-issue-row {
+  padding: 14px;
+  text-align: left;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.nearby-issue-row:hover,
+.nearby-issue-row.active {
+  border-color: rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+
+.nearby-issue-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.nearby-distance-chip {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.nearby-issue-title,
+.nearby-detail-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.nearby-issue-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.nearby-details-panel {
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.nearby-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.nearby-detail-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 960px) {
+  .nearby-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

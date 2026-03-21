@@ -12,6 +12,7 @@ import Notifications from './pages/citizen/Notifications';
 import BlockchainLedger from './pages/citizen/BlockchainLedger';
 import EmergencyAssistant from './pages/citizen/EmergencyAssistant';
 import ClusterPage from './pages/citizen/ClusterPage';
+import NearbyIssuesPage from './pages/shared/NearbyIssues';
 
 // Admin pages
 import AdminDashboard from './pages/admin/Dashboard';
@@ -47,6 +48,13 @@ function isAuthorityRole(role) {
     return role === 'authority' || role === 'admin';
 }
 
+function getLayoutRole() {
+    const user = getUser();
+    if (isAuthorityRole(user?.role)) return 'authority';
+    if (user?.role === 'ngo') return 'ngo';
+    return 'citizen';
+}
+
 function ProtectedRoute({ children, allowedRole }) {
     const token = localStorage.getItem('token');
     const user = getUser();
@@ -61,6 +69,13 @@ function ProtectedRoute({ children, allowedRole }) {
     if (allowedRole === 'ngo' && user.role !== 'ngo') {
         return <Navigate to="/citizen/dashboard" replace />;
     }
+    return children;
+}
+
+function AuthenticatedRoute({ children }) {
+    const token = localStorage.getItem('token');
+    const user = getUser();
+    if (!token || !user) return <Navigate to="/" replace />;
     return children;
 }
 
@@ -123,6 +138,17 @@ export default function App() {
                         <Route path="ngo-requests" element={<NGORequests />} />
                         <Route path="traffic-prediction" element={<TrafficPrediction />} />
                         <Route path="blocked" element={<BlockedUsers />} />
+                    </Route>
+
+                    <Route
+                        path="/issues/*"
+                        element={
+                            <AuthenticatedRoute>
+                                <AppLayout role={getLayoutRole()} />
+                            </AuthenticatedRoute>
+                        }
+                    >
+                        <Route path="nearby" element={<NearbyIssuesPage />} />
                     </Route>
 
 
