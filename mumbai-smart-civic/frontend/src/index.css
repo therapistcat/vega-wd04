@@ -3170,6 +3170,21 @@ textarea {
   color: var(--success);
 }
 
+.impact-priority-high {
+  background: rgba(239, 68, 68, 0.14);
+  color: #b91c1c;
+}
+
+.impact-priority-medium {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+.impact-priority-low {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+}
+
 .stat-chip-up {
   background: rgba(16, 185, 129, 0.16);
   color: #047857;

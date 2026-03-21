@@ -119,6 +119,12 @@ def serialize_complaint(complaint: Dict[str, Any], viewer_user_id: str | None = 
         "assigned_ngo_name": complaint.get("assigned_ngo_name"),
         "progress_status": complaint.get("progress_status", "Pending"),
         "progress_updates": complaint.get("progress_updates") or [],
+        "duplicate_count": int(complaint.get("duplicate_count", 1) or 1),
+        "impact_score": float(complaint["impact_score"]) if complaint.get("impact_score") is not None else None,
+        "affected_people": int(complaint["affected_people"]) if complaint.get("affected_people") is not None else None,
+        "impact_priority": complaint.get("impact_priority"),
+        "recommendation_text": complaint.get("recommendation_text"),
+        "impact_reason": complaint.get("impact_reason"),
         "created_at": complaint.get("created_at"),
         "updated_at": complaint.get("updated_at"),
     }

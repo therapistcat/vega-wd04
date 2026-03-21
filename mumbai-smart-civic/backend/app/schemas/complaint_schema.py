@@ -51,6 +51,12 @@ class ComplaintResponse(BaseModel):
     assigned_ngo_name: str | None = None
     progress_status: str = "Pending"
     progress_updates: list[dict] = []
+    duplicate_count: int = 1
+    impact_score: float | None = None
+    affected_people: int | None = None
+    impact_priority: Literal["LOW", "MEDIUM", "HIGH"] | None = None
+    recommendation_text: str | None = None
+    impact_reason: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

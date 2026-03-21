@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     MdCheckCircle,
+    MdInsights,
     MdPending,
     MdPeople,
     MdReport,
-    MdTrendingUp,
     MdWarningAmber,
     MdCall,
 } from 'react-icons/md';
@@ -26,17 +26,20 @@ function toErrorMessage(err, fallback = 'Action failed') {
     return fallback;
 }
 
-function computePriorityScore(complaint) {
-    const created = complaint?.created_at ? new Date(complaint.created_at) : new Date();
-    const ageHours = Math.max(0, (Date.now() - created.getTime()) / 36e5);
-    const upvotes = Number(complaint?.upvotes_count || 0);
-    const priority = Number(complaint?.priority_score || 0);
-    const status = String(complaint?.status || '').toLowerCase();
+function formatPeople(value) {
+    const number = Number(value || 0);
+    if (!Number.isFinite(number)) return '-';
+    return number.toLocaleString();
+}
 
-    const freshBonus = Math.max(0, 2 - ageHours / 12);
-    const statusBonus = status === 'open' ? 0.8 : (status === 'in progress' ? 0.4 : -0.5);
-    const score = (upvotes * 2.5 * Math.pow(0.5, ageHours / 24)) + (priority * 2) + freshBonus + statusBonus;
-    return Number(score.toFixed(2));
+function impactBarColor(priority) {
+    if (priority === 'HIGH') return 'linear-gradient(90deg, #ef4444, #f97316)';
+    if (priority === 'MEDIUM') return 'linear-gradient(90deg, #f59e0b, #facc15)';
+    return 'linear-gradient(90deg, #10b981, #34d399)';
+}
+
+function impactPriorityClass(priority) {
+    return String(priority || 'LOW').toLowerCase();
 }
 
 function toStatusClass(status) {
@@ -79,21 +82,29 @@ export default function AdminDashboard() {
         const resolved = complaints.filter((c) => c.status === 'Resolved').length;
         const pending = complaints.filter((c) => c.status !== 'Resolved').length;
         const citizens = new Set(complaints.map((c) => c.user_id)).size;
-        return { total, resolved, pending, citizens };
+        const avgImpact = total > 0
+            ? Math.round(complaints.reduce((sum, c) => sum + Number(c.impact_score || 0), 0) / total)
+            : 0;
+        return { total, resolved, pending, citizens, avgImpact };
     }, [complaints]);
 
     const rankedComplaints = useMemo(() => {
         return [...complaints]
             .filter((c) => sourceFilter === 'all' || c.source === sourceFilter)
-            .map((c) => ({ ...c, dashboard_score: computePriorityScore(c) }))
             .sort((a, b) => {
-                if (b.dashboard_score !== a.dashboard_score) return b.dashboard_score - a.dashboard_score;
+                if (Number(b.impact_score || 0) !== Number(a.impact_score || 0)) {
+                    return Number(b.impact_score || 0) - Number(a.impact_score || 0);
+                }
+                if (Number(b.priority_score || 0) !== Number(a.priority_score || 0)) {
+                    return Number(b.priority_score || 0) - Number(a.priority_score || 0);
+                }
                 return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
             });
-    }, [complaints]);
+    }, [complaints, sourceFilter]);
 
     const recent = useMemo(() => rankedComplaints.slice(0, 5), [rankedComplaints]);
     const actionable = useMemo(() => rankedComplaints.filter((c) => c.status !== 'Resolved').slice(0, 8), [rankedComplaints]);
+    const recommendedActions = useMemo(() => actionable.slice(0, 3), [actionable]);
 
     const topToday = useMemo(() => {
         const now = new Date();
@@ -178,6 +189,45 @@ export default function AdminDashboard() {
                     <div className="card-value-large">{stats.citizens}</div>
                     <div className="card-label-sub">Registered Citizens</div>
                 </div>
+
+                <div className="card-stat-glass">
+                    <div className="card-header-flex">
+                        <div className="card-icon-box stat-icon-trend"><MdInsights /></div>
+                    </div>
+                    <div className="card-value-large">{stats.avgImpact}</div>
+                    <div className="card-label-sub">Avg Impact Score</div>
+                </div>
+            </div>
+
+            <div className="table-glass-container dashboard-panel-gap">
+                <div className="table-head">
+                    <h3 className="table-title"><MdWarningAmber style={{ verticalAlign: 'middle', marginRight: 6 }} />Recommended Actions</h3>
+                </div>
+                {recommendedActions.length === 0 ? (
+                    <div className="dashboard-empty">
+                        <p>No active recommendations right now.</p>
+                    </div>
+                ) : (
+                    <div style={{ padding: 14, display: 'grid', gap: 12 }}>
+                        {recommendedActions.map((issue, index) => (
+                            <div key={issue.id} className="glass-panel" style={{ padding: 14 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+                                    <div className="area-report-meta">Recommendation #{index + 1} | {issue.impact_priority || 'LOW'} priority</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                        Impact {Number(issue.impact_score || 0).toFixed(1)} | People {formatPeople(issue.affected_people)}
+                                    </div>
+                                </div>
+                                <div className="area-report-title">{issue.description?.slice(0, 130) || 'Complaint'}</div>
+                                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6 }}>
+                                    {issue.recommendation_text}
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+                                    Why this matters: {issue.impact_reason}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             <div className="table-glass-container" style={{ marginBottom: 16 }}>
@@ -191,7 +241,10 @@ export default function AdminDashboard() {
                             <div className="area-report-meta">{topToday.ward} | {topToday.status}</div>
                             <div className="area-report-title">{topToday.description?.slice(0, 120) || 'Complaint'}</div>
                             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
-                                Upvotes: {topToday.upvotes_count || 0} | Priority: {topToday.priority_score || 0} | Score: {topToday.dashboard_score}
+                                Impact: {Number(topToday.impact_score || 0).toFixed(1)} | People: {formatPeople(topToday.affected_people)} | Base priority: {topToday.priority_score || 0}
+                            </div>
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
+                                {topToday.recommendation_text}
                             </div>
                         </div>
                     )}
@@ -227,9 +280,9 @@ export default function AdminDashboard() {
                             <thead>
                                 <tr>
                                     <th>Issue</th>
-                                    <th>Upvotes</th>
-                                    <th>Priority</th>
-                                    <th>Score</th>
+                                    <th>Impact</th>
+                                    <th>People</th>
+                                    <th>AI Priority</th>
                                     <th>Status</th>
                                     <th>Quick Action</th>
                                 </tr>
@@ -239,11 +292,36 @@ export default function AdminDashboard() {
                                     <tr key={c.id}>
                                         <td className="cell-title">
                                             {c.source === 'call' && <MdCall style={{ color: 'var(--primary)', marginRight: 6 }} />}
-                                            {c.description?.slice(0, 80) || 'Complaint'}
+                                            <div>{c.description?.slice(0, 80) || 'Complaint'}</div>
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+                                                {c.recommendation_text}
+                                            </div>
                                         </td>
-                                        <td>{c.upvotes_count || 0}</td>
-                                        <td>{c.priority_score || 0}</td>
-                                        <td>{c.dashboard_score}</td>
+                                        <td style={{ minWidth: 170 }}>
+                                            <div style={{ display: 'grid', gap: 8 }}>
+                                                <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                                                    {Number(c.impact_score || 0).toFixed(1)}/100
+                                                </div>
+                                                <div style={{ height: 8, borderRadius: 999, background: 'var(--bg-input)', overflow: 'hidden' }}>
+                                                    <div
+                                                        style={{
+                                                            width: `${Math.max(4, Math.min(100, Number(c.impact_score || 0)))}%`,
+                                                            height: '100%',
+                                                            background: impactBarColor(c.impact_priority),
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                                    Duplicates: {c.duplicate_count || 1} | Upvotes: {c.upvotes_count || 0}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>{formatPeople(c.affected_people)}</td>
+                                        <td>
+                                            <span className={`badge-pill impact-priority-${impactPriorityClass(c.impact_priority)}`}>
+                                                {c.impact_priority || 'LOW'}
+                                            </span>
+                                        </td>
                                         <td>
                                             <span className={`badge-pill status-${toStatusClass(c.status)}`}>
                                                 {c.status || 'Pending'}
@@ -302,8 +380,8 @@ export default function AdminDashboard() {
                                     <th>Reference ID</th>
                                     <th>Title</th>
                                     <th>Category</th>
-                                    <th>Status</th>
-                                    <th>Date</th>
+                                    <th>AI Priority</th>
+                                    <th>Impact</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -313,12 +391,12 @@ export default function AdminDashboard() {
                                         <td className="cell-title">{c.description?.slice(0, 45) || 'Complaint'}</td>
                                         <td><span className="cell-category">{c.category || 'General'}</span></td>
                                         <td>
-                                            <span className={`badge-pill status-${toStatusClass(c.status)}`}>
-                                                {c.status || 'Pending'}
+                                            <span className={`badge-pill impact-priority-${impactPriorityClass(c.impact_priority)}`}>
+                                                {c.impact_priority || 'LOW'}
                                             </span>
                                         </td>
                                         <td className="cell-date">
-                                            {c.created_at ? new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '--'}
+                                            {Number(c.impact_score || 0).toFixed(1)}
                                         </td>
                                     </tr>
                                 ))}

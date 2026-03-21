@@ -17,6 +17,7 @@ from app.schemas.complaint_schema import (
     SpatialAnalyticsPoint,
 )
 from app.models.ngo_request_model import NGO_REQUESTS_COLLECTION
+from app.services.impact_engine import enrich_complaints_with_impact
 from app.services.spatial_service import compute_spatial_analytics
 
 
@@ -82,11 +83,12 @@ async def list_all_complaints(
 ) -> list[ComplaintResponse]:
     cursor = db[COMPLAINTS_COLLECTION].find({})
     complaints = await cursor.to_list(length=500)
+    complaints = await enrich_complaints_with_impact(db, complaints)
     now = datetime.now(timezone.utc)
     
-    # Sort complaints as before
     complaints.sort(
         key=lambda row: (
+            float(row.get("impact_score") or 0.0),
             _authority_rank_score(row, now),
             _as_utc_datetime(row.get("updated_at") or row.get("created_at")),
         ),
