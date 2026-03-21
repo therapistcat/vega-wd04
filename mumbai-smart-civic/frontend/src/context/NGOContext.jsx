@@ -22,7 +22,7 @@ export const NGOProvider = ({ children }) => {
                 ? '/ngo-requests' 
                 : '/ngo-requests/me';
             const res = await api.get(endpoint);
-            setNgoRequests(res.data);
+            setNgoRequests(Array.isArray(res.data) ? res.data : []);
         } catch (err) {
             // Don't throw - silently fail so non-NGO pages don't log out
             console.warn("NGO requests fetch skipped or failed:", err?.response?.status);
@@ -49,17 +49,23 @@ export const NGOProvider = ({ children }) => {
         fetchRequests();
     }, []);
 
-    const addRequest = async (request) => {
+    const addRequest = async (issueId, issueTitle = '') => {
+        const token = localStorage.getItem('token');
+        console.log("Sending request", issueId);
         const res = await api.post('/ngo-requests', {
-            issue_id: request.issueId,
-            issue_title: request.issueTitle
+            issue_id: issueId
+        }, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined
         });
         setNgoRequests(prev => [...prev, res.data]);
         return res.data;
     };
 
     const updateRequestStatus = async (requestId, status) => {
-        const res = await api.patch(`/ngo-requests/${requestId}`, { status });
+        const token = localStorage.getItem('token');
+        const res = await api.patch(`/ngo-requests/${requestId}`, { status }, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined
+        });
         setNgoRequests(prev => prev.map(req => 
             req.id === requestId ? res.data : req
         ));

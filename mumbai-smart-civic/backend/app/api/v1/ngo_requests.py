@@ -1,10 +1,11 @@
+from datetime import datetime, timezone
+from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from bson import ObjectId
-from datetime import datetime, timezone
+from pymongo import ReturnDocument
 
 from app.core.database import get_database
-from app.core.security import require_roles, require_authority
+from app.core.security import require_authority, require_ngo
 from app.models.ngo_request_model import (
     NGO_REQUESTS_COLLECTION,
     build_ngo_request_document,
@@ -23,20 +24,32 @@ router = APIRouter(prefix="/ngo-requests", tags=["NGO Requests"])
 @router.post("", response_model=NGORequestResponse, status_code=status.HTTP_201_CREATED)
 async def create_ngo_request(
     payload: NGORequestCreate,
-    current_user: dict = Depends(require_roles(["ngo"])),
+    current_user: dict = Depends(require_ngo()),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> NGORequestResponse:
-    # Check if a request already exists for this NGO and issue
+    print("NGO request payload:", payload.model_dump())
+    print("User:", current_user)
+
+    try:
+        issue_oid = ObjectId(payload.issue_id)
+        ngo_oid = ObjectId(current_user["id"])
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid issue id") from exc
+
+    complaint = await db[COMPLAINTS_COLLECTION].find_one({"_id": issue_oid})
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
     existing = await db[NGO_REQUESTS_COLLECTION].find_one({
-        "issue_id": ObjectId(payload.issue_id),
-        "ngo_id": ObjectId(current_user["id"]),
+        "issue_id": issue_oid,
+        "ngo_id": ngo_oid,
     })
     if existing:
-        raise HTTPException(status_code=400, detail="Request already submitted for this issue")
+        raise HTTPException(status_code=400, detail="Request already sent")
 
     document = build_ngo_request_document(
         issue_id=payload.issue_id,
-        issue_title=payload.issue_title,
+        issue_title=payload.issue_title or complaint.get("description") or "",
         ngo_id=current_user["id"],
         ngo_name=current_user["name"],
     )
@@ -49,24 +62,26 @@ async def list_all_ngo_requests(
     current_user: dict = Depends(require_authority(1)),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> list[NGORequestResponse]:
-    cursor = db[NGO_REQUESTS_COLLECTION].find({})
+    _ = current_user
+    cursor = db[NGO_REQUESTS_COLLECTION].find({}).sort("created_at", -1)
     requests = await cursor.to_list(length=500)
     return [NGORequestResponse.model_validate(serialize_ngo_request(r)) for r in requests]
 
 @router.get("/me", response_model=list[NGORequestResponse])
 async def list_my_requests(
-    current_user: dict = Depends(require_roles(["ngo"])),
+    current_user: dict = Depends(require_ngo()),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> list[NGORequestResponse]:
-    cursor = db[NGO_REQUESTS_COLLECTION].find({"ngo_id": ObjectId(current_user["id"])})
+    cursor = db[NGO_REQUESTS_COLLECTION].find({"ngo_id": ObjectId(current_user["id"])}).sort("created_at", -1)
     requests = await cursor.to_list(length=100)
     return [NGORequestResponse.model_validate(serialize_ngo_request(r)) for r in requests]
 
 @router.get("/available-issues", response_model=list[ComplaintResponse])
 async def list_available_issues(
-    current_user: dict = Depends(require_roles(["ngo"])),
+    current_user: dict = Depends(require_ngo()),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> list[ComplaintResponse]:
+    _ = current_user
     # NGOs should see all open complaints
     cursor = db[COMPLAINTS_COLLECTION].find({"status": "Open"})
     complaints = await cursor.to_list(length=500)
@@ -103,18 +118,21 @@ async def update_request_status(
     current_user: dict = Depends(require_authority(1)),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> NGORequestResponse:
+    _ = current_user
     try:
         oid = ObjectId(request_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid request id")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid request id") from exc
 
     result = await db[NGO_REQUESTS_COLLECTION].find_one_and_update(
         {"_id": oid},
-        {"$set": {
-            "status": payload.status,
-            "updated_at": datetime.now(timezone.utc)
-        }},
-        return_document=True
+        {
+            "$set": {
+                "status": payload.status,
+                "updated_at": datetime.now(timezone.utc),
+            }
+        },
+        return_document=ReturnDocument.AFTER,
     )
     if not result:
         raise HTTPException(status_code=404, detail="Request not found")

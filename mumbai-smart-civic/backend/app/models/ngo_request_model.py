@@ -7,14 +7,14 @@ NGO_REQUESTS_COLLECTION = "ngo_requests"
 def build_ngo_request_document(
     *,
     issue_id: str,
-    issue_title: str,
+    issue_title: str | None,
     ngo_id: str,
     ngo_name: str,
 ) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
     return {
         "issue_id": ObjectId(issue_id),
-        "issue_title": issue_title,
+        "issue_title": (issue_title or "").strip(),
         "ngo_id": ObjectId(ngo_id),
         "ngo_name": ngo_name,
         "status": "pending",  # pending, approved, rejected

@@ -1,10 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNGO } from '../../context/NGOContext';
 import Button from '../../components/ui/Button';
 import { MdCheck, MdClose, MdVisibility } from 'react-icons/md';
 
 export default function AdminNGORequests() {
     const { ngoRequests, updateRequestStatus } = useNGO();
+    const [updatingId, setUpdatingId] = useState('');
+
+    const handleStatusUpdate = async (requestId, status) => {
+        if (!requestId || updatingId === requestId) return;
+        setUpdatingId(requestId);
+        try {
+            await updateRequestStatus(requestId, status);
+        } finally {
+            setUpdatingId('');
+        }
+    };
 
     return (
         <div className="page-container">
@@ -35,14 +46,16 @@ export default function AdminNGORequests() {
                                             size="sm" 
                                             className="btn-success" 
                                             style={{ background: '#10b981', color: 'white', border: 'none' }}
-                                            onClick={() => updateRequestStatus(req.id, 'approved')}
+                                            disabled={updatingId === req.id}
+                                            onClick={() => handleStatusUpdate(req.id, 'approved')}
                                         >
-                                            <MdCheck style={{ marginRight: '4px' }} /> Approve
+                                            <MdCheck style={{ marginRight: '4px' }} /> {updatingId === req.id ? 'Saving...' : 'Approve'}
                                         </Button>
                                         <Button 
                                             size="sm" 
                                             variant="danger" 
-                                            onClick={() => updateRequestStatus(req.id, 'rejected')}
+                                            disabled={updatingId === req.id}
+                                            onClick={() => handleStatusUpdate(req.id, 'rejected')}
                                         >
                                             <MdClose style={{ marginRight: '4px' }} /> Reject
                                         </Button>

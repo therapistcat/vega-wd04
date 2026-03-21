@@ -3,8 +3,7 @@ import { useNGO } from '../../context/NGOContext';
 
 export default function MyAssistanceRequests() {
     const { ngoRequests } = useNGO();
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const myRequests = ngoRequests.filter(req => (req.ngo_name || req.ngoName) === user.name);
+    const myRequests = ngoRequests;
 
     return (
         <div className="page-container">

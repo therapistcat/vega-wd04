@@ -6,7 +6,7 @@ NGORequestStatus = Literal["pending", "approved", "rejected"]
 
 class NGORequestCreate(BaseModel):
     issue_id: str
-    issue_title: str
+    issue_title: str | None = None
 
 class NGORequestUpdate(BaseModel):
     status: NGORequestStatus

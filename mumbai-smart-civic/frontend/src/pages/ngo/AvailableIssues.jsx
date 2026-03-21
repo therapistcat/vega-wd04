@@ -10,7 +10,7 @@ export default function AvailableIssues() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(null);
     const [toast, setToast] = useState(null);
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const [submittingId, setSubmittingId] = useState('');
 
     const fetchComplaints = async () => {
         setLoading(true);
@@ -30,19 +30,25 @@ export default function AvailableIssues() {
     }, []);
 
     const handleRequest = async (issue) => {
+        const issueId = issue?._id || issue?.id;
+        if (!issueId) {
+            setToast("Missing issue id");
+            setTimeout(() => setToast(null), 3000);
+            return;
+        }
+
+        setSubmittingId(issueId);
         try {
-            await addRequest({
-                issueId: issue.id,
-                issueTitle: issue.description,
-                ngoName: user.name,
-                ngoEmail: user.email
-            });
+            await addRequest(issueId, issue.description);
             setShowModal(null);
-            setToast("Request sent to Admin for approval");
+            setToast("Request Sent");
             setTimeout(() => setToast(null), 3000);
         } catch (err) {
-            setToast("Failed to send request");
+            const message = err?.response?.data?.detail || "Failed to send request";
+            setToast(message);
             setTimeout(() => setToast(null), 3000);
+        } finally {
+            setSubmittingId('');
         }
     };
 
@@ -71,8 +77,8 @@ export default function AvailableIssues() {
                     </thead>
                     <tbody>
                         {complaints.map((c, i) => (
-                            <tr key={c.id || i}>
-                                <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>#{c.id || 1000 + i}</td>
+                            <tr key={c.id || c._id || i}>
+                                <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>#{c.id || c._id || 1000 + i}</td>
                                 <td style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{c.description?.slice(0, 60)}</td>
                                 <td><span className="badge-pill">{c.category || 'General'}</span></td>
                                 <td>
@@ -81,10 +87,10 @@ export default function AvailableIssues() {
                                     </span>
                                 </td>
                                 <td>
-                                    {isAlreadyRequested(c.id) ? (
-                                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Requested</span>
+                                    {isAlreadyRequested(c._id || c.id) ? (
+                                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Request Sent</span>
                                     ) : (
-                                        <Button size="sm" onClick={() => setShowModal(c)}>Request to Assist</Button>
+                                        <Button size="sm" disabled={submittingId === (c._id || c.id)} onClick={() => setShowModal(c)}>Request to Assist</Button>
                                     )}
                                 </td>
                             </tr>
@@ -102,7 +108,9 @@ export default function AvailableIssues() {
                         </p>
                         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                             <Button variant="ghost" onClick={() => setShowModal(null)}>Cancel</Button>
-                            <Button onClick={() => handleRequest(showModal)}>Confirm</Button>
+                            <Button disabled={submittingId === (showModal?._id || showModal?.id)} onClick={() => handleRequest(showModal)}>
+                                {submittingId === (showModal?._id || showModal?.id) ? 'Sending...' : 'Confirm'}
+                            </Button>
                         </div>
                     </div>
                 </div>
