@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo import ASCENDING, GEOSPHERE
+from pymongo.errors import OperationFailure
 
 from app.core.config import settings
 
@@ -57,9 +58,25 @@ async def init_indexes() -> None:
     await db["announcements"].create_index([("created_at", ASCENDING)])
     await db["blockchain_ledger"].create_index("complaint_id", unique=True, sparse=True)
     await db["blockchain_ledger"].create_index("index")
-    await db["blockchain_ledger"].create_index([("chain_type", ASCENDING), ("index", ASCENDING)], unique=True, sparse=True)
+    try:
+        await db["blockchain_ledger"].create_index(
+            [("chain_type", ASCENDING), ("index", ASCENDING)],
+            unique=True,
+            sparse=True,
+        )
+    except OperationFailure as exc:
+        # Older deployments may already have the same index without sparse=True.
+        # That index is still usable for audit-chain uniqueness, so startup should continue.
+        if getattr(exc, "code", None) != 86:
+            raise
     await db["blockchain_ledger"].create_index([("chain_type", ASCENDING), ("timestamp", ASCENDING)])
     await db["blockchain_ledger"].create_index([("chain_type", ASCENDING), ("data.issue_id", ASCENDING)])
     await db["ngo_requests"].create_index([("issue_id", ASCENDING)])
     await db["ngo_requests"].create_index([("ngo_id", ASCENDING)])
-    await db["ngo_requests"].create_index([("issue_id", ASCENDING), ("ngo_id", ASCENDING)])
+    try:
+        await db["ngo_requests"].create_index([("issue_id", ASCENDING), ("ngo_id", ASCENDING)])
+    except OperationFailure as exc:
+        if getattr(exc, "code", None) != 86:
+            raise
+    await db["whatsapp_sessions"].create_index([("phone_number", ASCENDING)], unique=True)
+    await db["whatsapp_sessions"].create_index([("expires_at", ASCENDING)], expireAfterSeconds=0)

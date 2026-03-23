@@ -30,6 +30,13 @@ const CATEGORY_OPTIONS = [
 const DETECTION_VERIFY_THRESHOLD = 0.5;
 const DASHBOARD_REFRESH_MS = 15000;
 
+function getComplaintSourceLabel(source) {
+    const normalized = String(source || '').toLowerCase();
+    if (normalized === 'call') return '📞 Reported via Call';
+    if (normalized === 'whatsapp') return 'WhatsApp Complaint';
+    return '';
+}
+
 function toErrorMessage(err, fallback = 'Something went wrong') {
     const detail = err?.response?.data?.detail;
     if (typeof detail === 'string' && detail.trim()) return detail;
@@ -742,7 +749,7 @@ export default function CitizenDashboard() {
                                             <span className="tag">Status: {c.status}</span>
                                             <span className="tag">Department: {c.department || c.predicted_department || 'N/A'}</span>
                                             <span className="tag">Priority: {c.priority_score}</span>
-                                            {c.source === 'call' && <span className="tag">📞 Reported via Call</span>}
+                                            {getComplaintSourceLabel(c.source) && <span className="tag">{getComplaintSourceLabel(c.source)}</span>}
                                             {c.assigned_ngo_name && <span className="tag">Tracked by NGO: {c.assigned_ngo_name}</span>}
                                             {c.assigned_ngo_name && <span className="tag">NGO Progress: {c.progress_status || 'Pending'}</span>}
                                         </div>
@@ -791,8 +798,8 @@ export default function CitizenDashboard() {
                                     <div className="area-report-title">
                                         {dailyPriority.top_report.description?.slice(0, 90) || 'Report'}
                                     </div>
-                                    {dailyPriority.top_report.source === 'call' && (
-                                        <div className="area-report-reporter">📞 Reported via Call</div>
+                                    {getComplaintSourceLabel(dailyPriority.top_report.source) && (
+                                        <div className="area-report-reporter">{getComplaintSourceLabel(dailyPriority.top_report.source)}</div>
                                     )}
                                     <div className="area-report-reporter">
                                         Upvotes: {dailyPriority.top_report.upvotes_count || 0}
@@ -872,8 +879,8 @@ export default function CitizenDashboard() {
                                     >
                                         <div className="area-report-meta">{r.ward} | {r.status}</div>
                                         <div className="area-report-title">{r.description?.slice(0, 75) || 'Report'}</div>
-                                        {r.source === 'call' && (
-                                            <div className="area-report-reporter">📞 Reported via Call</div>
+                                        {getComplaintSourceLabel(r.source) && (
+                                            <div className="area-report-reporter">{getComplaintSourceLabel(r.source)}</div>
                                         )}
                                         <div className="area-report-reporter">
                                             By: {r.reporter?.name || 'Unknown'} ({r.reporter?.email || 'N/A'})

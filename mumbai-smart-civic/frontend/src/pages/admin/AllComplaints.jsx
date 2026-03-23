@@ -5,6 +5,29 @@ import api from '../../utils/api';
 import { useNGO } from '../../context/NGOContext';
 import { MdPeople } from 'react-icons/md';
 
+function getSourceBadge(source) {
+    const normalized = String(source || '').toLowerCase();
+    if (normalized === 'call') {
+        return {
+            label: 'Call',
+            background: 'rgba(37, 99, 235, 0.12)',
+            color: 'var(--primary)',
+        };
+    }
+    if (normalized === 'whatsapp') {
+        return {
+            label: 'WhatsApp',
+            background: 'rgba(16, 185, 129, 0.12)',
+            color: '#059669',
+        };
+    }
+    return {
+        label: 'Web',
+        background: 'var(--bg-input)',
+        color: 'var(--text-secondary)',
+    };
+}
+
 export default function AllComplaints() {
     const [complaints, setComplaints] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -130,8 +153,8 @@ export default function AllComplaints() {
                                             </span>
                                         </td>
                                         <td>
-                                            <span className="badge-pill" style={{ background: c.source === 'call' ? 'rgba(37, 99, 235, 0.12)' : 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: c.source === 'call' ? 'var(--primary)' : 'var(--text-secondary)', fontSize: 11 }}>
-                                                {c.source === 'call' ? 'Call' : 'Web'}
+                                            <span className="badge-pill" style={{ background: getSourceBadge(c.source).background, border: '1px solid var(--border-subtle)', color: getSourceBadge(c.source).color, fontSize: 11 }}>
+                                                {getSourceBadge(c.source).label}
                                             </span>
                                         </td>
                                         <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>

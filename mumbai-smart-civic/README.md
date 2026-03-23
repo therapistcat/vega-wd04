@@ -3,10 +3,11 @@
 End-to-end civic issue reporting and resolution platform for Mumbai, built with FastAPI, MongoDB, React, and an integrated ML detection pipeline.
 
 This repository contains:
-- Citizen-facing complaint workflows (reporting, upvotes, progress, heatmaps, notifications)
-- Authority workflows (priority queue, status actions, resolution with image proof)
+- Citizen-facing complaint workflows (reporting, upvotes, progress, heatmaps, notifications, nearby issue discovery)
+- Authority workflows (priority queue, impact-based recommendations, status actions, resolution with image proof)
+- NGO workflows (requesting issues, assignment sync, progress updates, resolution tracking)
 - AI-assisted complaint interactions (tool-calling agent)
-- Tamper-evident blockchain complaint anchoring
+- Tamper-evident blockchain complaint anchoring + transparency audit ledger
 - YOLO-based garbage and pothole detection/training pipeline
 
 ## Why this project
@@ -14,7 +15,9 @@ This repository contains:
 Mumbai-scale civic operations require:
 - Fast reporting from citizens
 - Clear routing to responsible departments
+- A single source of truth for issue status across citizen, NGO, and authority views
 - Prioritization based on urgency and public signal (upvotes)
+- Transparent decision support for authorities based on impact and public reach
 - Traceable closure evidence from authorities
 - Spatial intelligence for hotspot planning
 
@@ -34,25 +37,41 @@ This implementation is Mumbai-first (wards, landmarks, heatmap behavior, complai
 - Progress dashboard with trend, badges, and recent reports
 - Daily "Most Important Fix Today" card from DB
 - Heatmap from MongoDB-backed spatial analytics
+- Interactive map clicks that fetch nearby issues within a chosen radius
+- Marker clustering, colored issue pins, and nearby-issues navigation dashboard
 - Notifications/announcements with backend fallback behavior
 - Blockchain ledger view and complaint verification
 
 ### Authority/Admin
 - Role-protected authority login with rank code validation
 - Ranked complaint queue based on urgency + upvotes + freshness
+- Explainable impact engine with impact score, affected people, priority level, and recommendation text
+- Top recommended actions panel for high-impact fixes
 - Quick status actions from dashboard (Open/In Progress/Resolved)
 - Resolve workflow with mandatory fixed-work image when status = Resolved
 - Spatial analytics dashboard with heatmap
 - Full complaint listing and filtering
+- Blockchain transparency ledger page with chain verification and issue filtering
+
+### NGO
+- NGO-specific login and workspace
+- Request-to-assist flow for open complaints
+- Approved assignment sync directly into `complaints`
+- Assigned issue dashboard backed by `complaints` as the single source of truth
+- Progress timeline updates that reflect globally in citizen and admin views
+- NGO-driven issue resolution with synced complaint state and audit logging
 
 ### Backend intelligence
 - Duplicate detection window by distance + time
 - ST-DBSCAN style clustering for duplicate groups
 - Intensity scoring for heatmap points
+- Nearby-issues geospatial query endpoint for map exploration
+- Impact engine that combines duplicates, population, severity, and engagement
 - Rule-based + optional external ML triage for department prediction
 - AI tool-calling endpoint for complaint creation/status/summary tasks
 - Vapi webhook ingestion with token protection
 - Blockchain anchoring and tamper verification
+- Append-only transparency audit ledger for complaint lifecycle events
 
 ## Architecture
 
@@ -60,8 +79,10 @@ This implementation is Mumbai-first (wards, landmarks, heatmap behavior, complai
 Frontend (React + Vite)
   -> /api/*, /static/* proxied by Vite
 Backend (FastAPI)
-  -> MongoDB (users, complaints, announcements, vapi_events, blockchain_ledger)
+  -> MongoDB (users, complaints, announcements, ngo_requests, vapi_events, blockchain_ledger)
   -> Detection Service (YOLO model loaded from app/ml_models/best.pt)
+  -> Blockchain Transparency Layer (SHA-256 audit chain + verification)
+  -> Impact Engine (duplicate count + ward population + severity + engagement)
   -> AI Agent (OpenAI-compatible chat/completions + tool calls)
 ```
 
@@ -72,6 +93,7 @@ mumbai-smart-civic/
   backend/
     app/
       api/v1/              # auth, citizen, admin, detection, blockchain, vapi
+      blockchain/          # transparency audit chain internals
       ai/                  # agent route + callable tools
       core/                # settings, DB, security
       models/              # complaint/user model helpers
@@ -86,7 +108,9 @@ mumbai-smart-civic/
     src/
       pages/
         citizen/           # dashboard, progress, heatmap, notifications, ledger
-        admin/             # authority dashboard, resolve, analytics
+        admin/             # authority dashboard, resolve, analytics, blockchain ledger
+        ngo/               # NGO dashboard, requests, assigned work
+        shared/            # cross-role pages such as nearby issue explorer
       components/          # layout, map, heat layer, UI components
       utils/api.js         # axios client with JWT interceptors
     package.json
@@ -110,7 +134,7 @@ mumbai-smart-civic/
 - Vite 5
 - React Router 6
 - Axios
-- Leaflet + react-leaflet + leaflet.heat
+- Leaflet + react-leaflet + leaflet.heat + leaflet.markercluster
 - react-icons
 
 ## Local Setup
@@ -233,6 +257,7 @@ python scripts/seed_data.py
 Seed includes:
 - authority user
 - citizen user
+- NGO user
 - sample complaints
 - sample announcements
 
@@ -250,12 +275,22 @@ Seed includes:
 - `/citizen/notifications`
 - `/citizen/blockchain-ledger`
 
+### Shared Authenticated
+- `/issues/nearby`
+
+### NGO
+- `/ngo/dashboard`
+- `/ngo/available-issues`
+- `/ngo/my-requests`
+- `/ngo/assigned-issues`
+
 ### Authority/Admin
 - `/admin/dashboard`
 - `/admin/all-complaints`
 - `/admin/blockchain-ledger`
 - `/admin/resolve`
 - `/admin/analytics`
+- `/admin/ngo-requests`
 
 ## API Overview
 
@@ -283,6 +318,19 @@ Base prefix: `/api/v1`
 - `GET /c/reports/{complaint_id}`
 - `GET /c/status/{complaint_id}`
 - `GET /c/progress/overview`
+
+### Nearby Issues
+- `GET /issues/nearby`
+
+### NGO
+- `POST /ngo-requests`
+- `GET /ngo-requests`
+- `GET /ngo-requests/me`
+- `GET /ngo-requests/available-issues`
+- `PATCH /ngo-requests/{request_id}`
+- `GET /ngo/assigned-issues`
+- `PATCH /ngo/issues/{issue_id}/progress`
+- `GET /ngo/issues/{issue_id}/updates`
 
 ### Authority
 - `GET /a/complaints`
@@ -314,22 +362,29 @@ Base prefix: `/api/v1`
 ### Complaint lifecycle
 - Initial status: `Open`
 - Valid statuses: `Open`, `In Progress`, `Resolved`
+- Complaint state is the single source of truth for status, NGO assignment, progress, and resolution
+- `ngo_requests` stores request workflow metadata only (pending/approved/rejected + NGO/issue relation)
+- NGO assignment is denormalized into complaint fields (`assigned_ngo_id`, `assigned_ngo_name`) for faster reads
+- NGO progress is stored in `complaints.progress_status` and `complaints.progress_updates`
 - Resolution proof image is mandatory when resolved through `status-with-proof`
 - Upvotes are user-specific toggles with `upvoted_by` tracking
+- Authority responses also include impact-engine fields such as `impact_score`, `affected_people`, and `recommendation_text`
 
 ### Storage and indexing
 Collections:
 - `users`
 - `complaints`
 - `announcements`
+- `ngo_requests`
 - `vapi_events`
 - `blockchain_ledger`
 
 Indexes include:
 - unique `users.email`
 - 2dsphere `complaints.location`
-- complaint indexes on time/user/department/status/upvotes
+- complaint indexes on time/user/department/status/upvotes/assigned NGO
 - unique sparse `blockchain_ledger.complaint_id`
+- audit-ledger indexes on `chain_type + index`, `chain_type + timestamp`, and `chain_type + data.issue_id`
 
 ## Real-time and Ranking Behavior
 
@@ -345,6 +400,7 @@ Ranking behavior (implemented in backend/frontend):
 - Older vote influence decays over time
 - Status-based weighting adjusts urgency
 - Daily top-priority report is selected from today non-resolved complaints
+- Admin decisioning uses an explainable impact score built from duplicate count, ward population, severity, and engagement
 
 If no daily priority exists for the day, API/UI message is:
 - `No reports detected today.`
@@ -399,6 +455,36 @@ What training script does:
 - summarizing heatmap hotspots
 
 Context includes user role and optional coordinates.
+
+## NGO Workflow Details
+
+- NGOs can browse open complaints and submit assistance requests
+- Authorities approve or reject NGO requests
+- On approval, the assigned NGO is written directly into the complaint document
+- NGO progress updates and NGO resolutions update the complaint itself, so citizen dashboards, admin dashboards, analytics, and feeds stay in sync
+- Assigned NGO work is read from `complaints`, not reconstructed from `ngo_requests`
+
+## Nearby Issue Exploration
+
+- Clicking the citizen heatmap fetches nearby issues through MongoDB geospatial search
+- Nearby complaints are shown as color-coded markers with Leaflet clustering
+- Marker popups show status, NGO assignment, and a link to the nearby-issues dashboard
+- `/issues/nearby` lists nearby complaints with distance and priority-based sorting
+
+## Authority Decision AI Assistant
+
+- Lightweight scoring-based decision engine, no heavy model training
+- Computes:
+  - impact score
+  - estimated affected people
+  - priority label (`LOW`, `MEDIUM`, `HIGH`)
+  - recommendation text
+- Inputs used:
+  - duplicate count from clustering signals
+  - ward population mapping
+  - category severity weight
+  - upvotes / engagement
+- Output is shown directly in the admin dashboard and used to sort recommended actions
 
 ## Blockchain Ledger Details
 

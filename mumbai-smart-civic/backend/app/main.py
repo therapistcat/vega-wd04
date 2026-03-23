@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.v1 import admin, auth, blockchain, citizen, clusters, detection, issues, moderation, traffic, vapi, ngo, ngo_requests
+from app.api.v1 import admin, auth, blockchain, citizen, clusters, detection, issues, moderation, traffic, vapi, whatsapp, ngo, ngo_requests
 from app.emergency.router import router as emergency_router
 from app.ai.ai_agent import router as ai_agent_router
 from app.core.config import settings
@@ -66,6 +66,7 @@ app.include_router(detection.router, prefix=settings.api_v1_prefix)
 app.include_router(traffic.router, prefix=settings.api_v1_prefix)
 app.include_router(ai_agent_router, prefix=settings.api_v1_prefix)
 app.include_router(vapi.router, prefix=settings.api_v1_prefix)
+app.include_router(whatsapp.router, prefix=settings.api_v1_prefix)
 app.include_router(ngo_requests.router, prefix=settings.api_v1_prefix)
 app.include_router(ngo.router, prefix=settings.api_v1_prefix)
 app.include_router(issues.router, prefix=settings.api_v1_prefix)
