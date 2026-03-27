@@ -32,7 +32,6 @@ from app.services.whatsapp_session_service import (
 WHATSAPP_LOG_COLLECTION = "vapi_events"
 UPLOAD_DIR = Path(__file__).resolve().parents[1] / "static" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-GRAPH_BASE = "https://graph.facebook.com"
 
 WELCOME_TEXT = (
     "Hello! Mumbai Smart Civic Portal here. I will help you report an issue. "
@@ -44,18 +43,7 @@ PROCESSING_TEXT = "Location received. Filing your complaint now..."
 RESTART_TEXT = "Something went wrong. Please send hi to try again."
 
 
-def extract_messages(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    entries = payload.get("entry") or []
-    messages: list[dict[str, Any]] = []
-    for entry in entries:
-        for change in entry.get("changes") or []:
-            value = change.get("value") or {}
-            for message in value.get("messages") or []:
-                messages.append({"value": value, "message": message})
-    return messages
-
-
-async def log_webhook_event(
+async def log_whatsapp_event(
     db: AsyncIOMotorDatabase,
     *,
     message_type: str,
@@ -74,10 +62,6 @@ async def log_webhook_event(
             **({"error": error} if error else {}),
         }
     )
-
-
-def _graph_headers() -> dict[str, str]:
-    return {"Authorization": f"Bearer {settings.whatsapp_access_token}"}
 
 
 async def _chat_completion(messages: list[dict[str, Any]]) -> str:
@@ -145,23 +129,6 @@ async def transcribe_media(media_bytes: bytes, mime_type: str | None, filename: 
         return str(data.get("text") or "").strip()
 
 
-async def download_whatsapp_media(media_id: str) -> tuple[bytes, str | None, str | None]:
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        meta_res = await client.get(
-            f"{GRAPH_BASE}/{settings.whatsapp_api_version}/{media_id}",
-            headers=_graph_headers(),
-        )
-        meta_res.raise_for_status()
-        meta = meta_res.json()
-        media_url = meta.get("url")
-        if not media_url:
-            raise RuntimeError("WhatsApp media URL missing")
-        mime_type = meta.get("mime_type")
-        file_res = await client.get(media_url, headers=_graph_headers())
-        file_res.raise_for_status()
-        return file_res.content, mime_type, meta.get("sha256")
-
-
 def _suffix_from_mime(mime_type: str | None, default_ext: str) -> str:
     mime = str(mime_type or "").lower()
     if "png" in mime:
@@ -189,21 +156,10 @@ def save_media_bytes(raw: bytes, suffix: str) -> str:
 
 
 async def send_whatsapp_reply(phone: str, text: str) -> None:
-    if not settings.whatsapp_access_token:
-        return
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": phone,
-        "type": "text",
-        "text": {"body": text},
-    }
-    endpoint = f"{GRAPH_BASE}/{settings.whatsapp_api_version}/{settings.whatsapp_phone_number_id}/messages"
+    payload = {"phone": phone, "text": text}
+    endpoint = f"{settings.baileys_bridge_url.rstrip('/')}/send"
     async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            endpoint,
-            headers={**_graph_headers(), "Content-Type": "application/json"},
-            json=payload,
-        )
+        response = await client.post(endpoint, json=payload)
         response.raise_for_status()
 
 
@@ -215,14 +171,20 @@ def _extract_text_body(message: dict[str, Any]) -> str:
     return str((message.get("text") or {}).get("body") or "").strip()
 
 
+def _media_payload(message: dict[str, Any], media_type: str) -> tuple[bytes, str | None]:
+    payload = message.get(media_type) or {}
+    media_bytes = payload.get("bytes")
+    if not isinstance(media_bytes, (bytes, bytearray)):
+        raise ValueError(f"Missing media bytes for {media_type}")
+    return bytes(media_bytes), payload.get("mime_type")
+
+
 async def _extract_complaint_text(message: dict[str, Any]) -> tuple[str, str, str]:
     message_type = _message_type(message)
     if message_type == "text":
         original = _extract_text_body(message)
     elif message_type in {"audio", "video"}:
-        media = message.get(message_type) or {}
-        media_id = str(media.get("id") or "")
-        media_bytes, mime_type, _ = await download_whatsapp_media(media_id)
+        media_bytes, mime_type = _media_payload(message, message_type)
         original = await transcribe_media(
             media_bytes,
             mime_type,
@@ -238,9 +200,7 @@ async def _extract_complaint_text(message: dict[str, Any]) -> tuple[str, str, st
 async def _extract_image_data(message: dict[str, Any]) -> tuple[str, list[dict[str, Any]], str]:
     if _message_type(message) != "image":
         raise ValueError("Please send an image of the issue.")
-    image = message.get("image") or {}
-    image_id = str(image.get("id") or "")
-    image_bytes, mime_type, _ = await download_whatsapp_media(image_id)
+    image_bytes, mime_type = _media_payload(message, "image")
     image_path = save_media_bytes(image_bytes, _suffix_from_mime(mime_type, ".jpg"))
     detections = await get_detection_service().detect_bytes(image_bytes)
     top = detections[0] if detections else {}
@@ -257,10 +217,7 @@ def _extract_location(message: dict[str, Any]) -> dict[str, float]:
     lng = location.get("longitude")
     if lat is None or lng is None:
         raise ValueError("Location data is missing. Please send the location again.")
-    return {
-        "latitude": float(lat),
-        "longitude": float(lng),
-    }
+    return {"latitude": float(lat), "longitude": float(lng)}
 
 
 async def _create_complaint_from_session(
@@ -315,19 +272,16 @@ async def _reply_and_result(*, phone: str, message: str, result: dict[str, Any] 
     return {"success": True, "reply": message, **(result or {})}
 
 
-async def process_whatsapp_message(
+async def handle_incoming_message(
     db: AsyncIOMotorDatabase,
     background_tasks: BackgroundTasks,
     *,
-    wrapped_message: dict[str, Any],
+    phone: str,
+    message: dict[str, Any],
+    raw_payload: dict[str, Any],
 ) -> dict[str, Any]:
-    message = wrapped_message.get("message") or {}
-    phone = str(message.get("from") or "").strip()
     message_type = _message_type(message)
-    await log_webhook_event(db, message_type=message_type, phone=phone, payload=wrapped_message)
-
-    if not phone:
-        return {"success": False, "error": "Missing sender phone number", "type": message_type}
+    await log_whatsapp_event(db, message_type=message_type, phone=phone, payload=raw_payload)
 
     session = await get_session(db, phone)
     if session and session.get("state") == STATE_DONE:
@@ -336,6 +290,7 @@ async def process_whatsapp_message(
 
     if session is None:
         await start_session(db, phone)
+        print("Sending reply:", phone, WELCOME_TEXT)
         await send_whatsapp_reply(phone, WELCOME_TEXT)
         return {
             "success": True,
@@ -393,6 +348,7 @@ async def process_whatsapp_message(
                 state=STATE_PROCESSING,
                 fields={"location": location},
             )
+            print("Sending reply:", phone, PROCESSING_TEXT)
             await send_whatsapp_reply(phone, PROCESSING_TEXT)
             complaint_id = await _create_complaint_from_session(
                 db,
@@ -402,6 +358,7 @@ async def process_whatsapp_message(
             )
             await complete_session(db, phone, complaint_id=complaint_id)
             final_text = f"Complaint registered successfully. ID: {complaint_id}"
+            print("Sending reply:", phone, final_text)
             await send_whatsapp_reply(phone, final_text)
             return {
                 "success": True,
@@ -413,6 +370,7 @@ async def process_whatsapp_message(
             }
 
         await start_session(db, phone)
+        print("Sending reply:", phone, WELCOME_TEXT)
         await send_whatsapp_reply(phone, WELCOME_TEXT)
         return {
             "success": True,
@@ -424,15 +382,16 @@ async def process_whatsapp_message(
     except Exception as exc:
         error_message = str(exc)
         print(f"[whatsapp] processing failed for {phone}: {error_message}")
-        await log_webhook_event(
+        await log_whatsapp_event(
             db,
             message_type="whatsapp_failure",
             phone=phone,
-            payload=wrapped_message,
+            payload=raw_payload,
             error=error_message,
         )
         await reset_session(db, phone)
         try:
+            print("Sending reply:", phone, f"{error_message} Send hi to try again.")
             await send_whatsapp_reply(phone, f"{error_message} Send hi to try again.")
         except Exception:
             pass
