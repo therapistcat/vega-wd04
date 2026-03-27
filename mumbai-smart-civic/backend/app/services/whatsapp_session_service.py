@@ -29,13 +29,22 @@ def _session_base(phone_number: str) -> dict[str, Any]:
     now = _now()
     expires_at = _expiry()
     return {
+        "phone": phone_number,
         "phone_number": phone_number,
         "state": STATE_AWAITING_COMPLAINT,
+        "current_step": STATE_AWAITING_COMPLAINT,
         "complaint_text": "",
         "complaint_text_original": "",
         "image_path": "",
         "detected_category": "",
         "location": None,
+        "temp_data": {
+            "complaint_text": "",
+            "complaint_text_original": "",
+            "image_path": "",
+            "detected_category": "",
+            "location": None,
+        },
         "created_at": now,
         "updated_at": now,
         "expires_at": expires_at,
@@ -86,8 +95,15 @@ async def update_session(
     }
     if state is not None:
         update_fields["state"] = state
+        update_fields["current_step"] = state
     if fields:
         update_fields.update(fields)
+        temp_data = {}
+        for key in ("complaint_text", "complaint_text_original", "image_path", "detected_category", "location"):
+            if key in fields:
+                temp_data[key] = fields[key]
+        if temp_data:
+            update_fields["temp_data"] = temp_data
     await db[WHATSAPP_SESSIONS_COLLECTION].update_one(
         {"phone_number": phone_number},
         {"$set": update_fields},
@@ -107,7 +123,8 @@ async def complete_session(
         {"phone_number": phone_number},
         {
             "$set": {
-                "state": STATE_DONE,
+                "state": STATE_IDLE,
+                "current_step": STATE_IDLE,
                 "complaint_id": complaint_id,
                 "updated_at": _now(),
                 "expires_at": _expiry(),

@@ -51,7 +51,10 @@ class Settings(BaseSettings):
         "Latitude/longitude are optional. If unavailable, proceed using landmark."
     )
     vapi_service_token: str | None = None
-    baileys_bridge_url: str = "http://localhost:3000"
+    whatsapp_access_token: str | None = None
+    whatsapp_phone_number_id: str | None = None
+    whatsapp_verify_token: str = "mumbai_civic_verify_2025"
+    whatsapp_api_version: str = "v19.0"
 
     duplicate_radius_meters: int = 50
     duplicate_window_hours: int = 48

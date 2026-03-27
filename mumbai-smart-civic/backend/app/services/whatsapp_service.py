@@ -19,6 +19,7 @@ from app.services.whatsapp_session_service import (
     STATE_AWAITING_IMAGE,
     STATE_AWAITING_LOCATION,
     STATE_DONE,
+    STATE_IDLE,
     STATE_PROCESSING,
     complete_session,
     get_session,
@@ -33,13 +34,11 @@ WHATSAPP_LOG_COLLECTION = "vapi_events"
 UPLOAD_DIR = Path(__file__).resolve().parents[1] / "static" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-WELCOME_TEXT = (
-    "Hello! Mumbai Smart Civic Portal here. I will help you report an issue. "
-    "Please describe your complaint using text, voice, or video."
-)
-ASK_IMAGE_TEXT = "Got it. Now please send an image of the issue."
-ASK_LOCATION_TEXT = "Image received. Please share the location of the issue."
+WELCOME_TEXT = "Please describe your issue"
+ASK_IMAGE_TEXT = "Upload an image"
+ASK_LOCATION_TEXT = "Share location"
 PROCESSING_TEXT = "Location received. Filing your complaint now..."
+SUCCESS_TEXT = "Complaint registered successfully"
 RESTART_TEXT = "Something went wrong. Please send hi to try again."
 
 
@@ -155,12 +154,45 @@ def save_media_bytes(raw: bytes, suffix: str) -> str:
     return f"/static/uploads/{file_name}"
 
 
+def _normalize_phone(phone: str) -> str:
+    return "".join(ch for ch in str(phone or "") if ch.isdigit())
+
+
 async def send_whatsapp_reply(phone: str, text: str) -> None:
-    payload = {"phone": phone, "text": text}
-    endpoint = f"{settings.baileys_bridge_url.rstrip('/')}/send"
+    normalized_phone = _normalize_phone(phone)
+    if not normalized_phone:
+        raise ValueError("Missing WhatsApp phone number")
+    if not settings.whatsapp_access_token:
+        raise ValueError("WHATSAPP_ACCESS_TOKEN is not configured")
+    if not settings.whatsapp_phone_number_id:
+        raise ValueError("WHATSAPP_PHONE_NUMBER_ID is not configured")
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": normalized_phone,
+        "type": "text",
+        "text": {"body": text},
+    }
+    endpoint = (
+        f"https://graph.facebook.com/{settings.whatsapp_api_version}/"
+        f"{settings.whatsapp_phone_number_id}/messages"
+    )
+    print("SENDING TO:", normalized_phone)
+    print("MESSAGE:", text)
+    print(f"TO: {normalized_phone} | RESPONSE: {text}")
     async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(endpoint, json=payload)
-        response.raise_for_status()
+        response = await client.post(
+            endpoint,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {settings.whatsapp_access_token}",
+                "Content-Type": "application/json",
+            },
+        )
+        print("META RESPONSE STATUS:", response.status_code)
+        print("META RESPONSE BODY:", response.text)
+        if response.status_code != 200:
+            raise ValueError(f"Meta send failed ({response.status_code}): {response.text}")
 
 
 def _message_type(message: dict[str, Any]) -> str:
@@ -281,14 +313,16 @@ async def handle_incoming_message(
     raw_payload: dict[str, Any],
 ) -> dict[str, Any]:
     message_type = _message_type(message)
+    print(f"FROM: {phone} | TYPE: {message_type}")
     await log_whatsapp_event(db, message_type=message_type, phone=phone, payload=raw_payload)
+    message_text = _extract_text_body(message).strip().lower() if message_type == "text" else ""
 
     session = await get_session(db, phone)
-    if session and session.get("state") == STATE_DONE:
+    if session and session.get("state") in {STATE_DONE, STATE_IDLE}:
         await reset_session(db, phone)
         session = None
 
-    if session is None:
+    if session is None or message_text in {"hi", "hello", "start", "restart"}:
         await start_session(db, phone)
         print("Sending reply:", phone, WELCOME_TEXT)
         await send_whatsapp_reply(phone, WELCOME_TEXT)
@@ -357,14 +391,14 @@ async def handle_incoming_message(
                 session=processing_session,
             )
             await complete_session(db, phone, complaint_id=complaint_id)
-            final_text = f"Complaint registered successfully. ID: {complaint_id}"
+            final_text = f"{SUCCESS_TEXT}. ID: {complaint_id}"
             print("Sending reply:", phone, final_text)
             await send_whatsapp_reply(phone, final_text)
             return {
                 "success": True,
                 "phone": phone,
                 "type": message_type,
-                "state": STATE_DONE,
+                "state": STATE_IDLE,
                 "complaint_id": complaint_id,
                 "reply": final_text,
             }
