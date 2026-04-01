@@ -7,6 +7,7 @@ This repository contains:
 - Authority workflows (priority queue, impact-based recommendations, status actions, resolution with image proof)
 - NGO workflows (requesting issues, assignment sync, progress updates, resolution tracking)
 - AI-assisted complaint interactions (tool-calling agent)
+- AI Emergency Visual Assistant (generates personalized medical/disaster comic visual guides for illiterate citizens)
 - Tamper-evident blockchain complaint anchoring + transparency audit ledger
 - YOLO-based garbage and pothole detection/training pipeline
 
@@ -20,6 +21,7 @@ Mumbai-scale civic operations require:
 - Transparent decision support for authorities based on impact and public reach
 - Traceable closure evidence from authorities
 - Spatial intelligence for hotspot planning
+- Accessible emergency guidelines (visual-first)
 
 This implementation is Mumbai-first (wards, landmarks, heatmap behavior, complaint flow), but designed to be adapted to other cities.
 
@@ -41,6 +43,13 @@ This implementation is Mumbai-first (wards, landmarks, heatmap behavior, complai
 - Marker clustering, colored issue pins, and nearby-issues navigation dashboard
 - Notifications/announcements with backend fallback behavior
 - Blockchain ledger view and complaint verification
+
+### Emergency Visual Assistant (AI)
+- Conversational emergency input (e.g., "Fire in my kitchen", "Flood in school")
+- Gemini-powered context extraction to classify disaster type, location, and urgency
+- Rule-engine + AI to generate 3 highly targeted, personalized steps based on your exact situation
+- Instant PDF generation with bold comic-style illustrations for illiterate inclusivity
+- Integrated with Voice input UI via Vapi / browser Speech API
 
 ### Authority/Admin
 - Role-protected authority login with rank code validation
@@ -69,6 +78,7 @@ This implementation is Mumbai-first (wards, landmarks, heatmap behavior, complai
 - Impact engine that combines duplicates, population, severity, and engagement
 - Rule-based + optional external ML triage for department prediction
 - AI tool-calling endpoint for complaint creation/status/summary tasks
+- Emergency visual guide pipeline (LLM extraction + ReportLab drawing)
 - Vapi webhook ingestion with token protection
 - Blockchain anchoring and tamper verification
 - Append-only transparency audit ledger for complaint lifecycle events
@@ -84,6 +94,7 @@ Backend (FastAPI)
   -> Blockchain Transparency Layer (SHA-256 audit chain + verification)
   -> Impact Engine (duplicate count + ward population + severity + engagement)
   -> AI Agent (OpenAI-compatible chat/completions + tool calls)
+  -> Emergency Guide Service (Gemini API + ReportLab PDF generation)
 ```
 
 ## Repository Structure
@@ -95,11 +106,13 @@ mumbai-smart-civic/
       api/v1/              # auth, citizen, admin, detection, blockchain, vapi
       blockchain/          # transparency audit chain internals
       ai/                  # agent route + callable tools
+      emergency/           # AI emergency visual assistant + PDF generation
       core/                # settings, DB, security
       models/              # complaint/user model helpers
       schemas/             # request/response schemas
       services/            # detection, spatial, duplicate, blockchain, etc.
       static/uploads/      # user-uploaded complaint/fix images
+      static/generated/    # emergency PDF output
     ml_engine/             # triage + utility ML modules
     scripts/               # seed data, model training, tunnel helpers
     data/, ml_data/, runs/ # datasets, training outputs, model artifacts
@@ -107,7 +120,7 @@ mumbai-smart-civic/
   frontend/
     src/
       pages/
-        citizen/           # dashboard, progress, heatmap, notifications, ledger
+        citizen/           # dashboard, progress, heatmap, notifications, ledger, emergency assistant
         admin/             # authority dashboard, resolve, analytics, blockchain ledger
         ngo/               # NGO dashboard, requests, assigned work
         shared/            # cross-role pages such as nearby issue explorer
@@ -128,6 +141,8 @@ mumbai-smart-civic/
 - ultralytics (YOLOv8)
 - opencv-python-headless
 - albumentations
+- google-generativeai
+- ReportLab
 
 ### Frontend
 - React 18
@@ -136,6 +151,7 @@ mumbai-smart-civic/
 - Axios
 - Leaflet + react-leaflet + leaflet.heat + leaflet.markercluster
 - react-icons
+- SpeechRecognition API
 
 ## Local Setup
 
@@ -215,7 +231,7 @@ CLUSTER_SPATIAL_EPS_METERS=120
 CLUSTER_TEMPORAL_EPS_HOURS=36
 CLUSTER_MIN_SAMPLES=2
 
-# AI agent
+# AI agent & Emergency Visuals
 OPENAI_API_KEY=<openai-key>
 OPENAI_API_BASE=https://api.openai.com/v1
 AI_AGENT_MODEL=gpt-4o-mini
@@ -274,6 +290,7 @@ Seed includes:
 - `/citizen/heatmap`
 - `/citizen/notifications`
 - `/citizen/blockchain-ledger`
+- `/citizen/emergency-assistant`
 
 ### Shared Authenticated
 - `/issues/nearby`
@@ -321,6 +338,9 @@ Base prefix: `/api/v1`
 
 ### Nearby Issues
 - `GET /issues/nearby`
+
+### Emergency Visual Assistant
+- `POST /api/emergency-visual` (No auth required, top-level `/api` prefix)
 
 ### NGO
 - `POST /ngo-requests`

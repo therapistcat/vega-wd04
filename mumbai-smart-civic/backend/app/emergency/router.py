@@ -14,7 +14,10 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
-from app.emergency.gemini_service import extract_emergency_context
+from app.emergency.gemini_service import (
+    extract_emergency_context,
+    generate_step_descriptions,
+)
 from app.emergency.rule_engine import get_actions
 from app.emergency.pdf_generator import generate_pdf
 from app.emergency.assets import ACTION_LABELS, DISASTER_TITLES
@@ -28,6 +31,9 @@ router = APIRouter(tags=["emergency-visual"])
 # ---------------------------------------------------------------------------
 _CACHE: OrderedDict[str, dict[str, Any]] = OrderedDict()
 _CACHE_MAX = 50
+
+# Clear stale cached results on startup (prevents old earthquake-only cache persisting)
+_CACHE.clear()
 
 
 def _cache_get(key: str) -> dict[str, Any] | None:
@@ -65,6 +71,7 @@ class EmergencyResponse(BaseModel):
     floor_level: int | None
     actions: list[str]
     action_labels: dict[str, str]
+    step_descriptions: list[str]
     pdf_url: str
     cached: bool = False
 
@@ -77,8 +84,9 @@ class EmergencyResponse(BaseModel):
     response_model=EmergencyResponse,
     summary="Generate AI Emergency Visual Guide",
     description=(
-        "Accepts a free-form emergency description, extracts context via Gemini 2.5 Flash, "
-        "applies rule-based action mapping, and generates a downloadable visual PDF guide."
+        "Accepts a free-form emergency description, extracts context via Gemini 2.0 Flash, "
+        "generates 3 personalized step descriptions, applies rule-based action mapping, "
+        "and generates a downloadable visual PDF guide with comic illustrations."
     ),
 )
 async def generate_emergency_visual(payload: EmergencyRequest) -> EmergencyResponse:
@@ -89,25 +97,50 @@ async def generate_emergency_visual(payload: EmergencyRequest) -> EmergencyRespo
         LOGGER.info("Emergency cache hit for input hash %s", cache_key[:8])
         return EmergencyResponse(**cached, cached=True)
 
-    # --- Gemini extraction ---
+    # --- Gemini context extraction ---
     try:
         context = await extract_emergency_context(payload.user_input)
     except Exception as exc:
         LOGGER.error("Emergency context extraction failed: %s", exc)
-        context = {
-            "disaster_type":    "generic",
-            "location_context": None,
-            "floor_level":      None,
-            "urgency_level":    "high",
-        }
+        if "429" in str(exc) or "quota" in str(exc).lower() or "exhausted" in str(exc).lower():
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="AI quota exceeded. Please try again later.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI context extraction failed: {str(exc)[:100]}",
+        )
 
     disaster_type    = context["disaster_type"]
     urgency_level    = context["urgency_level"]
     location_context = context.get("location_context")
     floor_level      = context.get("floor_level")
 
-    # --- Rule engine ---
+    # --- Rule engine — get actions ---
     actions = get_actions(disaster_type, floor_level, location_context)
+
+    # --- Gemini personalized step descriptions ---
+    try:
+        step_descriptions = await generate_step_descriptions(
+            disaster_type=disaster_type,
+            location_context=location_context,
+            actions=actions,
+        )
+    except Exception as exc:
+        LOGGER.warning("Step description generation failed: %s", exc)
+        # It's okay to fallback for descriptions if context succeeded, 
+        # but if we strictly want no fallback, we could raise here too.
+        # Given we want reliable behavior, we'll raise.
+        if "429" in str(exc) or "quota" in str(exc).lower() or "exhausted" in str(exc).lower():
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="AI quota exceeded. Please try again later.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI step generation failed: {str(exc)[:100]}",
+        )
 
     # --- PDF generation ---
     try:
@@ -117,6 +150,7 @@ async def generate_emergency_visual(payload: EmergencyRequest) -> EmergencyRespo
             actions=actions,
             location_context=location_context,
             floor_level=floor_level,
+            step_descriptions=step_descriptions,
         )
     except Exception as exc:
         LOGGER.error("PDF generation failed: %s", exc)
@@ -125,19 +159,19 @@ async def generate_emergency_visual(payload: EmergencyRequest) -> EmergencyRespo
             detail="PDF generation failed. Please try again.",
         ) from exc
 
-    # Build action labels subset for response
     action_labels = {a: ACTION_LABELS.get(a, a.replace("_", " ").title()) for a in actions}
 
     result: dict[str, Any] = {
-        "status":           "success",
-        "disaster_type":    disaster_type,
-        "disaster_title":   DISASTER_TITLES.get(disaster_type, "EMERGENCY"),
-        "urgency_level":    urgency_level,
-        "location_context": location_context,
-        "floor_level":      floor_level,
-        "actions":          actions,
-        "action_labels":    action_labels,
-        "pdf_url":          pdf_url,
+        "status":            "success",
+        "disaster_type":     disaster_type,
+        "disaster_title":    DISASTER_TITLES.get(disaster_type, "EMERGENCY"),
+        "urgency_level":     urgency_level,
+        "location_context":  location_context,
+        "floor_level":       floor_level,
+        "actions":           actions,
+        "action_labels":     action_labels,
+        "step_descriptions": step_descriptions,
+        "pdf_url":           pdf_url,
     }
 
     _cache_set(cache_key, result)
